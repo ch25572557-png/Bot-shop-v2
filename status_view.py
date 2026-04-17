@@ -6,17 +6,27 @@ class StatusView(discord.ui.View):
         super().__init__()
         self.bot = bot
 
-    @discord.ui.button(label="📦 กำลังเตรียม", style=discord.ButtonStyle.blurple)
-    async def preparing(self, interaction, button):
-        self.bot.status.set("PREPARING")
-        await interaction.response.send_message("📦 เปลี่ยนเป็นกำลังเตรียม", ephemeral=True)
+    @discord.ui.button(label="⏳ รอแอดมินรับออเดอร์", style=discord.ButtonStyle.gray)
+    async def wait_admin(self, interaction, button):
+        self.bot.status.set("WAIT_ADMIN")
+        await interaction.response.send_message("⏳ ตั้งเป็นรอแอดมินรับออเดอร์แล้ว", ephemeral=True)
 
-    @discord.ui.button(label="🚚 กำลังส่ง", style=discord.ButtonStyle.gray)
-    async def shipping(self, interaction, button):
-        self.bot.status.set("SHIPPING")
-        await interaction.response.send_message("🚚 กำลังส่งของ", ephemeral=True)
+    @discord.ui.button(label="👨‍💼 แอดมินรับออเดอร์แล้ว", style=discord.ButtonStyle.blurple)
+    async def admin_accept(self, interaction, button):
+        self.bot.status.set("ADMIN_ACCEPTED")
+        await interaction.response.send_message("👨‍💼 แอดมินรับออเดอร์แล้ว", ephemeral=True)
 
-    @discord.ui.button(label="✅ เสร็จสิ้น", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="🪏 กำลังฟาร์ม", style=discord.ButtonStyle.green)
+    async def farming(self, interaction, button):
+        self.bot.status.set("FARMING")
+        await interaction.response.send_message("🪏 กำลังฟาร์ม", ephemeral=True)
+
+    @discord.ui.button(label="📦 รอลูกค้ารับของ", style=discord.ButtonStyle.gray)
+    async def waiting_customer(self, interaction, button):
+        self.bot.status.set("WAIT_CUSTOMER")
+        await interaction.response.send_message("📦 รอลูกค้ารับของ", ephemeral=True)
+
+    @discord.ui.button(label="✅ ส่งของเรียบร้อย", style=discord.ButtonStyle.green)
     async def done(self, interaction, button):
         self.bot.status.set("DONE")
-        await interaction.response.send_message("✅ ปิดงานแล้ว", ephemeral=True)
+        await interaction.response.send_message("✅ ส่งของเรียบร้อยแล้ว", ephemeral=True)
