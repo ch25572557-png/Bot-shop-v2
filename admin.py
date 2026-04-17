@@ -7,7 +7,7 @@ class AdminView(discord.ui.View):
         self.bot = bot
 
     @discord.ui.button(label="➕ เพิ่มสินค้า", style=discord.ButtonStyle.green)
-    async def add(self, interaction, button):
+    async def add(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(AddModal(self.bot))
 
 
@@ -21,7 +21,7 @@ class AddModal(discord.ui.Modal, title="Add Product"):
         super().__init__()
         self.bot = bot
 
-    async def on_submit(self, interaction):
+    async def on_submit(self, interaction: discord.Interaction):
 
         self.bot.stock.add(
             self.name.value,
