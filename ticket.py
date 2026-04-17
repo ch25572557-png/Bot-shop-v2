@@ -1,5 +1,5 @@
 import discord
-from ui.status_view import StatusView
+from status_view import StatusView
 
 class TicketSystem:
     def __init__(self, brain):
