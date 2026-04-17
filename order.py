@@ -8,7 +8,7 @@ class OrderSystem:
     async def create(self, guild, user, item):
 
         self.mem.cur.execute(
-            "INSERT INTO orders VALUES(?,?,?)",
+            "INSERT INTO orders (user, item, status) VALUES (?,?,?)",
             (str(user), item, "WAIT")
         )
         self.mem.conn.commit()
