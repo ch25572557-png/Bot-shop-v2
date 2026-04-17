@@ -1,9 +1,9 @@
 class OrderSystem:
     def __init__(self, mem, ticket, notify, backup):
-    self.mem = mem
-    self.ticket = ticket
-    self.notify = notify
-    self.backup = backup
+        self.mem = mem
+        self.ticket = ticket
+        self.notify = notify
+        self.backup = backup
 
     async def create(self, guild, user, item):
 
