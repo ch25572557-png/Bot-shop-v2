@@ -26,8 +26,10 @@ class TicketSystem:
             overwrites=overwrites
         )
 
-    await channel.send(
-    f"🎫 Ticket created for {user.mention}",
-    view=StatusView(self)
-)
+        # ✔ ต้องอยู่ใน block เดียวกัน
+        await channel.send(
+            f"🎫 Ticket created for {user.mention}",
+            view=StatusView(self)
+        )
+
         return channel
