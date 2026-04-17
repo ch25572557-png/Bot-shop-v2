@@ -2,10 +2,10 @@ class StatusSystem:
     def __init__(self, mem):
         self.mem = mem
 
-    def set(self, status):
+    def set(self, user, status):
         self.mem.cur.execute(
-            "UPDATE orders SET status=?",
-            (status,)
+            "UPDATE orders SET status=? WHERE user=?",
+            (status, str(user))
         )
         self.mem.conn.commit()
 
@@ -14,4 +14,5 @@ class StatusSystem:
             "SELECT status FROM orders WHERE user=?",
             (str(user),)
         )
-        return self.mem.cur.fetchone()
+        data = self.mem.cur.fetchone()
+        return data[0] if data else None
