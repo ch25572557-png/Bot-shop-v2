@@ -1,71 +1,42 @@
 import discord
-import os
-import asyncio
-from dotenv import load_dotenv
 
-from core.db import DB
-from core.config import Config
-from core.shop import Shop
-from core.points import Points
-from core.backup import Backup
-from core.auto_backup import AutoBackup
-from core.auto_restore import AutoRestore
+from core.brain import Brain
+from core.memory import Memory
 
-from modules.product import Product
-from modules.stock import Stock
-from modules.dashboard import Dashboard
-from modules.ticket import Ticket
+from systems.ticket import TicketSystem
+from systems.stock import StockSystem
+from systems.notify import NotifySystem
+from systems.order import OrderSystem
 
-from ui.ticket_ui import TicketButton
-from systems.modal import OrderModal
-
-load_dotenv()
+from ui.shop import ShopView
+from ui.admin import AdminView
 
 intents = discord.Intents.all()
 bot = discord.Client(intents=intents)
 
-bot.config = Config()
-bot.db = DB()
+# CORE
+bot.brain = Brain()
+bot.mem = Memory()
 
-bot.points = Points(bot.db)
-bot.shop = Shop(bot.db, bot.points)
-
-bot.product = Product(bot.db)
-bot.stock = Stock(bot.db)
-bot.dashboard = Dashboard()
-
-bot.backup = Backup()
-bot.auto_backup = AutoBackup(bot, 3600)
-bot.auto_restore = AutoRestore(bot)
+# SYSTEMS
+bot.stock = StockSystem(bot.mem)
+bot.ticket = TicketSystem(bot.brain)
+bot.notify = NotifySystem(bot.brain, bot)
+bot.order = OrderSystem(bot.mem, bot.ticket, bot.notify)
 
 @bot.event
 async def on_ready():
-    print("🟢 SYSTEM READY")
-
-    await bot.auto_restore.check_and_restore()
-
-    ch = bot.get_channel(int(bot.config.get("CHANNELS.DASHBOARD")))
-    if ch:
-        await ch.send("🎫 SHOP ONLINE", view=TicketButton(bot))
-
-    asyncio.create_task(bot.auto_backup.start())
+    print("🟢 FULL FINAL SHOP SYSTEM READY")
 
 @bot.event
-async def on_message(m):
-    if m.author.bot:
-        return
+async def on_message(message):
 
-    if m.content.startswith("!add"):
-        _, n, p, s = m.content.split()
-        bot.product.add(n, int(p), int(s))
-        await m.channel.send("✔ ADDED")
+    if message.content == "!shop":
+        await message.channel.send("🛒 SHOP ONLINE", view=ShopView(bot))
 
-    if m.content.startswith("!points"):
-        p = bot.points.get(m.author.id)
-        await m.channel.send(f"🎯 {p}")
+    if message.content == "!admin":
+        await message.channel.send("🛠 ADMIN PANEL", view=AdminView(bot))
 
-    if m.content.startswith("!backup"):
-        f = bot.backup.backup_db()
-        await m.channel.send(f"💾 {f}")
+import os
 
-bot.run(os.getenv("DISCORD_TOKEN"))
+bot.run(os.getenv("TOKEN"))
