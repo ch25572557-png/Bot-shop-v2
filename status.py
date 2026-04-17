@@ -2,17 +2,12 @@ class StatusSystem:
     def __init__(self, mem):
         self.mem = mem
 
-    def set(self, user, status):
-        self.mem.cur.execute(
-            "UPDATE orders SET status=? WHERE user=?",
-            (status, str(user))
-        )
-        self.mem.conn.commit()
+    def set(self, order_id, status):
+        self.mem.update_order_status(order_id, status)
 
-    def get(self, user):
+    def get(self, order_id):
         self.mem.cur.execute(
-            "SELECT status FROM orders WHERE user=?",
-            (str(user),)
+            "SELECT status FROM orders WHERE id=?",
+            (order_id,)
         )
-        data = self.mem.cur.fetchone()
-        return data[0] if data else None
+        return self.mem.cur.fetchone()
