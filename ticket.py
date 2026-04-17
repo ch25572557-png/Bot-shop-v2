@@ -1,4 +1,5 @@
 import discord
+from ui.status_view import StatusView
 
 class TicketSystem:
     def __init__(self, brain):
@@ -25,6 +26,8 @@ class TicketSystem:
             overwrites=overwrites
         )
 
-        await channel.send(f"🎫 Ticket created for {user.mention}\nReason: {reason}")
-
+    await channel.send(
+    f"🎫 Ticket created for {user.mention}",
+    view=StatusView(self)
+)
         return channel
