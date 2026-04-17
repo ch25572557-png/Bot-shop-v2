@@ -7,12 +7,14 @@ class OrderSystem:
 
     async def create(self, guild, user, item):
 
-        self.mem.cur.execute(
-            "INSERT INTO orders (user, item, status) VALUES (?,?,?)",
-            (str(user), item, "WAIT")
-        )
-        self.mem.conn.commit()
+        # 🟢 ใช้ Memory แทน SQL ตรง
+        order_id = self.mem.add_order(str(user), item, "WAIT")
 
+        # 📢 แจ้งแอดมิน
         await self.notify.admin(user, item)
-        await self.backup.log(f"ORDER | {user} | {item}")
-        await self.ticket.create(guild, user, "ORDER")
+
+        # 💾 log backup
+        await self.backup.log(f"ORDER #{order_id} | {user} | {item}")
+
+        # 🎫 สร้าง ticket (ส่ง order_id ไปด้วยจะดีมาก)
+        await self.ticket.create(guild, user, f"ORDER #{order_id}")
