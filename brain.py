@@ -5,7 +5,8 @@ class Brain:
         self.reload()
 
     def reload(self):
-        self.data = json.load(open("config.json","r",encoding="utf-8"))
+        with open("config.json", "r", encoding="utf-8") as f:
+            self.data = json.load(f)
 
     def get(self, path):
         v = self.data
