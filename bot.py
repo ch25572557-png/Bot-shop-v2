@@ -1,27 +1,37 @@
 import discord
-from discord.ext import commands
 import os
 from dotenv import load_dotenv
 
-from shop import ShopSystem
-from ticket import TicketSystem
+from shop import Shop
+from ui import AdminPanel, StatusView
 
 load_dotenv()
 
-TOKEN = os.getenv("DISCORD_TOKEN")
+intents = discord.Intents.default()
+intents.message_content = True
+intents.members = True
 
-intents = discord.Intents.all()
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = discord.Bot(intents=intents)
 
-shop = ShopSystem(bot)
-ticket = TicketSystem(bot, shop)
+shop = Shop(bot)
+
 
 @bot.event
 async def on_ready():
-    print(f"Bot Ready: {bot.user}")
+    print("BOT READY")
+
+    bot.loop.create_task(shop.live_dashboard())
+    bot.loop.create_task(shop.stock_watcher())
+
 
 @bot.command()
-async def setup(ctx):
-    await ticket.send_ticket_panel(ctx.channel)
+async def admin(ctx):
+    await ctx.send("🧠 ADMIN PANEL", view=AdminPanel())
 
-bot.run(TOKEN)
+
+@bot.command()
+async def shop(ctx):
+    await ctx.send("🛒 ORDER PANEL", view=StatusView())
+
+
+bot.run(os.getenv("DISCORD_TOKEN"))
