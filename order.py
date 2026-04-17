@@ -1,8 +1,9 @@
 class OrderSystem:
-    def __init__(self, mem, ticket, notify):
-        self.mem = mem
-        self.ticket = ticket
-        self.notify = notify
+    def __init__(self, mem, ticket, notify, backup):
+    self.mem = mem
+    self.ticket = ticket
+    self.notify = notify
+    self.backup = backup
 
     async def create(self, guild, user, item):
 
@@ -13,4 +14,5 @@ class OrderSystem:
         self.mem.conn.commit()
 
         await self.notify.admin(user, item)
+        await self.backup.log(f"ORDER | {user} | {item}")
         await self.ticket.create(guild, user, "ORDER")
