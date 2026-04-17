@@ -1,37 +1,63 @@
-import discord
-import os
+import discord,os
 from dotenv import load_dotenv
 
-from shop import Shop
-from ui import AdminPanel, StatusView
+from database import Database
+from stock import Stock
+from price import Price
+from notify import Notify
+from status import Status
+from backup import Backup
+from ticket import Ticket
+from dashboard import Dashboard
+from security import Security
+
+from engine import Engine
+from admin_panel import AdminPanel
+from order_modal import OrderModal
 
 load_dotenv()
 
-intents = discord.Intents.default()
-intents.message_content = True
-intents.members = True
+bot=discord.Client(intents=discord.Intents.all())
 
-bot = discord.Bot(intents=intents)
+db=Database()
+stock=Stock(db)
+price=Price(db)
+notify=Notify(bot)
 
-shop = Shop(bot)
+status=Status(["ACCEPTED","FARMING","DELIVERING","DONE"])
+backup=Backup()
+dashboard=Dashboard(db)
 
+ticket=Ticket({"DISCORD":{"CHANNELS":{"TICKET_CATEGORY":0}}})
+
+engine=Engine(db,stock,notify,status)
+
+bot.db=db
+bot.engine=engine
+bot.backup=backup
+bot.dashboard=dashboard
 
 @bot.event
 async def on_ready():
-    print("BOT READY")
+    print("🟢 FULL SYSTEM ONLINE")
 
-    bot.loop.create_task(shop.live_dashboard())
-    bot.loop.create_task(shop.stock_watcher())
+@bot.event
+async def on_message(m):
 
+    if m.author.bot:
+        return
 
-@bot.command()
-async def admin(ctx):
-    await ctx.send("🧠 ADMIN PANEL", view=AdminPanel())
+    if m.content=="!buy":
+        await m.channel.send_modal(OrderModal())
 
+    if m.content=="!admin":
+        await m.channel.send("🧠 ADMIN PANEL",view=AdminPanel())
 
-@bot.command()
-async def shop(ctx):
-    await ctx.send("🛒 ORDER PANEL", view=StatusView())
+    if m.content=="!dashboard":
+        await m.channel.send(embed=dashboard.build())
 
+    if m.content=="!backup":
+        backup.run()
+        await m.channel.send("✔ BACKUP DONE")
 
 bot.run(os.getenv("DISCORD_TOKEN"))
