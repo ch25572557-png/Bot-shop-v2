@@ -8,6 +8,10 @@ class NotifySystem:
             int(self.brain.get("CHANNELS.ADMIN"))
         )
 
+        # 🛡 กัน channel หาย
+        if ch is None:
+            return
+
         await ch.send(
-            f"🔔 NEW ORDER\nUser: {user}\nItem: {item}"
+            f"🔔 NEW ORDER\nUser: {user.mention}\nItem: {item}"
         )
