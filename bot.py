@@ -1,63 +1,71 @@
-import discord,os
+import discord
+import os
+import asyncio
 from dotenv import load_dotenv
 
-from database import Database
-from stock import Stock
-from price import Price
-from notify import Notify
-from status import Status
-from backup import Backup
-from ticket import Ticket
-from dashboard import Dashboard
-from security import Security
+from core.db import DB
+from core.config import Config
+from core.shop import Shop
+from core.points import Points
+from core.backup import Backup
+from core.auto_backup import AutoBackup
+from core.auto_restore import AutoRestore
 
-from engine import Engine
-from admin_panel import AdminPanel
-from order_modal import OrderModal
+from modules.product import Product
+from modules.stock import Stock
+from modules.dashboard import Dashboard
+from modules.ticket import Ticket
+
+from ui.ticket_ui import TicketButton
+from systems.modal import OrderModal
 
 load_dotenv()
 
-bot=discord.Client(intents=discord.Intents.all())
+intents = discord.Intents.all()
+bot = discord.Client(intents=intents)
 
-db=Database()
-stock=Stock(db)
-price=Price(db)
-notify=Notify(bot)
+bot.config = Config()
+bot.db = DB()
 
-status=Status(["ACCEPTED","FARMING","DELIVERING","DONE"])
-backup=Backup()
-dashboard=Dashboard(db)
+bot.points = Points(bot.db)
+bot.shop = Shop(bot.db, bot.points)
 
-ticket=Ticket({"DISCORD":{"CHANNELS":{"TICKET_CATEGORY":0}}})
+bot.product = Product(bot.db)
+bot.stock = Stock(bot.db)
+bot.dashboard = Dashboard()
 
-engine=Engine(db,stock,notify,status)
-
-bot.db=db
-bot.engine=engine
-bot.backup=backup
-bot.dashboard=dashboard
+bot.backup = Backup()
+bot.auto_backup = AutoBackup(bot, 3600)
+bot.auto_restore = AutoRestore(bot)
 
 @bot.event
 async def on_ready():
-    print("🟢 FULL SYSTEM ONLINE")
+    print("🟢 SYSTEM READY")
+
+    await bot.auto_restore.check_and_restore()
+
+    ch = bot.get_channel(int(bot.config.get("CHANNELS.DASHBOARD")))
+    if ch:
+        await ch.send("🎫 SHOP ONLINE", view=TicketButton(bot))
+
+    asyncio.create_task(bot.auto_backup.start())
 
 @bot.event
 async def on_message(m):
-
     if m.author.bot:
         return
 
-    if m.content=="!buy":
-        await m.channel.send_modal(OrderModal())
+    if m.content.startswith("!add"):
+        _, n, p, s = m.content.split()
+        bot.product.add(n, int(p), int(s))
+        await m.channel.send("✔ ADDED")
 
-    if m.content=="!admin":
-        await m.channel.send("🧠 ADMIN PANEL",view=AdminPanel())
+    if m.content.startswith("!points"):
+        p = bot.points.get(m.author.id)
+        await m.channel.send(f"🎯 {p}")
 
-    if m.content=="!dashboard":
-        await m.channel.send(embed=dashboard.build())
-
-    if m.content=="!backup":
-        backup.run()
-        await m.channel.send("✔ BACKUP DONE")
+    if m.content.startswith("!backup"):
+        f = bot.backup.backup_db()
+        await m.channel.send(f"💾 {f}")
 
 bot.run(os.getenv("DISCORD_TOKEN"))
