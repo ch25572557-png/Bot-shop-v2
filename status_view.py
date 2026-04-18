@@ -27,13 +27,17 @@ class StatusView(discord.ui.View):
             return interaction.user.guild_permissions.administrator
 
     # =====================
-    # 📢 SEND TO TICKET (🔥 FIX CORE)
+    # 📢 SEND TO TICKET (EMBED FIX)
     # =====================
     async def send_ticket(self, interaction, status):
         try:
-            msg = f"📊 STATUS UPDATE\n🎫 Order #{self.order_id}\n🔄 {status}"
+            embed = discord.Embed(
+                title="📊 STATUS UPDATE",
+                description=f"🎫 Order #{self.order_id}\n🔄 {status}",
+                color=0x3498db
+            )
 
-            await interaction.channel.send(msg)
+            await interaction.channel.send(embed=embed)
 
         except Exception as e:
             print("[TICKET STATUS ERROR]", e)
@@ -73,7 +77,7 @@ class StatusView(discord.ui.View):
         await interaction.response.send_message("👨‍💼 ADMIN_ACCEPTED", ephemeral=True)
 
     # =====================
-    # 🪏 FARM
+    # 🪏 FARMING
     # =====================
     @discord.ui.button(label="🪏 กำลังฟาร์ม", style=discord.ButtonStyle.green)
     async def farming(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -95,7 +99,7 @@ class StatusView(discord.ui.View):
         await interaction.response.send_message("📦 WAIT_CUSTOMER", ephemeral=True)
 
     # =====================
-    # ✅ DONE (FIX + CLOSE HANDLER)
+    # ✅ DONE (CLEAN FINISH)
     # =====================
     @discord.ui.button(label="✅ ส่งของเสร็จแล้ว", style=discord.ButtonStyle.red)
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -106,16 +110,12 @@ class StatusView(discord.ui.View):
                 ephemeral=True
             )
 
-        try:
-            await interaction.response.send_message(
-                "🔄 กำลังจบออเดอร์...",
-                ephemeral=True
-            )
-        except:
-            pass
+        await interaction.response.send_message(
+            "🔄 กำลังปิดออเดอร์...",
+            ephemeral=True
+        )
 
         try:
-            # เรียกระบบ complete (จะเป็นคนปิดห้อง)
             await self.bot.order.complete(interaction.channel)
 
         except Exception as e:
