@@ -7,12 +7,11 @@ class TicketSystem:
         self.bot = bot
 
     # =====================
-    # 📢 ADMIN SEND (CLEAN FIX)
+    # 📢 ADMIN SEND (SAFE)
     # =====================
     async def send_to_admin(self, guild, message: str):
         try:
             ch_id = self.brain.get("CHANNELS.ORDER_NOTIFY")
-
             if not ch_id:
                 return
 
@@ -20,15 +19,14 @@ class TicketSystem:
                 channel = self.bot.get_channel(int(ch_id))
                 if channel is None:
                     channel = await self.bot.fetch_channel(int(ch_id))
-            except Exception as e:
-                print("[ADMIN FETCH ERROR]", e)
+            except:
                 return
 
             if channel:
                 await channel.send(message)
 
-        except Exception as e:
-            print("[ADMIN NOTIFY ERROR]", e)
+        except:
+            pass
 
     # =====================
     # 🎫 CREATE TICKET
@@ -37,24 +35,29 @@ class TicketSystem:
 
         category = None
 
+        # =====================
+        # 📁 CATEGORY SAFE
+        # =====================
         try:
             category_id = self.brain.get("CHANNELS.TICKET_CATEGORY")
 
             if category_id:
-                ch = guild.get_channel(int(category_id))
-
-                if isinstance(ch, discord.CategoryChannel):
-                    category = ch
-                else:
-                    ch = await guild.fetch_channel(int(category_id))
+                try:
+                    ch = guild.get_channel(int(category_id))
                     if isinstance(ch, discord.CategoryChannel):
                         category = ch
+                    else:
+                        ch = await guild.fetch_channel(int(category_id))
+                        if isinstance(ch, discord.CategoryChannel):
+                            category = ch
+                except:
+                    category = None
 
-        except Exception as e:
-            print("[TICKET] category error:", e)
+        except:
+            category = None
 
         # =====================
-        # 🔒 PERMISSIONS
+        # 🔒 PERMISSION SAFE
         # =====================
         try:
             overwrites = {
@@ -62,8 +65,7 @@ class TicketSystem:
                 user: discord.PermissionOverwrite(view_channel=True),
                 guild.me: discord.PermissionOverwrite(view_channel=True)
             }
-        except Exception as e:
-            print("[TICKET] permission error:", e)
+        except:
             return None
 
         # =====================
@@ -75,12 +77,11 @@ class TicketSystem:
                 category=category,
                 overwrites=overwrites
             )
-        except Exception as e:
-            print("[TICKET] create error:", e)
+        except:
             return None
 
         # =====================
-        # 💾 SAVE
+        # 💾 SAVE TICKET
         # =====================
         try:
             self.bot.mem.save_ticket(order_id, str(channel.id))
@@ -88,7 +89,7 @@ class TicketSystem:
             pass
 
         # =====================
-        # 📦 ORDER LOAD
+        # 📦 ORDER LOAD SAFE
         # =====================
         item = "Unknown"
         amount = 1
@@ -99,21 +100,18 @@ class TicketSystem:
             if data:
                 data = list(data) + [None]*5
                 _, item, amount, roblox_user, _ = data[:5]
-        except Exception as e:
-            print("[TICKET] order load error:", e)
-
-        # =====================
-        # 📢 ADMIN NOTIFY (FIXED)
-        # =====================
-        try:
-            await self.send_to_admin(
-                guild,
-                f"🆕 ORDER #{order_id}\n"
-                f"👤 {user}\n"
-                f"📦 {item} x{amount}"
-            )
         except:
             pass
+
+        # =====================
+        # 📢 ADMIN NOTIFY
+        # =====================
+        await self.send_to_admin(
+            guild,
+            f"🆕 ORDER #{order_id}\n"
+            f"👤 {user}\n"
+            f"📦 {item} x{amount}"
+        )
 
         # =====================
         # 📢 TICKET MESSAGE
@@ -135,7 +133,7 @@ class TicketSystem:
                 view=StatusView(self.bot, order_id)
             )
 
-        except Exception as e:
-            print("[TICKET] send error:", e)
+        except:
+            pass
 
         return channel
