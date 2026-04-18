@@ -39,7 +39,7 @@ class TicketSystem:
             return None
 
         # =====================
-        # 💾 SAVE LINK (ใช้ mem function)
+        # 💾 SAVE LINK
         # =====================
         try:
             self.bot.mem.save_ticket(order_id, str(channel.id))
@@ -47,12 +47,43 @@ class TicketSystem:
             pass
 
         # =====================
-        # 📢 SEND MESSAGE + BUTTON
+        # 📦 GET ORDER DATA
         # =====================
         try:
+            data = self.bot.mem.get_order(order_id)
+        except:
+            data = None
+
+        # 🧠 รองรับของเก่า + ใหม่
+        if data:
+            try:
+                user_db, item, amount, roblox_user, status = data
+            except:
+                user_db, item, status = data
+                amount = 1
+                roblox_user = None
+        else:
+            item = "Unknown"
+            amount = 1
+            roblox_user = None
+
+        # =====================
+        # 📢 SEND MESSAGE
+        # =====================
+        try:
+            msg = (
+                f"🎫 ORDER #{order_id}\n"
+                f"👤 {user.mention}\n"
+                f"📦 {item} x{amount}\n"
+            )
+
+            if roblox_user:
+                msg += f"🎮 Roblox: {roblox_user}\n"
+
+            msg += "\n⚙️ ใช้ปุ่มด้านล่างเพื่ออัปเดตสถานะ"
+
             await channel.send(
-                f"🎫 Ticket for ORDER #{order_id}\n"
-                f"👤 {user.mention}",
+                msg,
                 view=StatusView(self.bot, order_id)
             )
         except:
