@@ -7,15 +7,19 @@ class AdminView(discord.ui.View):
         self.bot = bot
 
     # =====================
-    # 🔐 CHECK ADMIN ROLE
+    # 🔐 ROLE CHECK
     # =====================
-    def is_admin(self, interaction):
-        role_id = self.bot.brain.get("ROLES.ADMIN_ROLE")
+    def is_admin(self, interaction: discord.Interaction):
 
-        if not role_id:
+        try:
+            role_id = self.bot.brain.get("ROLES.ADMIN_ROLE")
+            if not role_id:
+                return False
+
+            return any(str(r.id) == str(role_id) for r in interaction.user.roles)
+
+        except:
             return False
-
-        return any(str(role.id) == str(role_id) for role in interaction.user.roles)
 
     # =====================
     # ➕ ADD PRODUCT
@@ -55,7 +59,7 @@ class AdminView(discord.ui.View):
         await interaction.response.send_message(msg, ephemeral=True)
 
     # =====================
-    # ❌ CANCEL + REFUND STOCK
+    # ❌ CANCEL + REFUND STOCK + FARM HOOK
     # =====================
     @discord.ui.button(label="❌ ยกเลิกออเดอร์", style=discord.ButtonStyle.red)
     async def cancel_order(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -66,23 +70,43 @@ class AdminView(discord.ui.View):
         await interaction.response.send_message("🧾 ใส่ Order ID", ephemeral=True)
 
         def check(m):
-            return m.author.id == interaction.user.id
+            return (
+                m.author.id == interaction.user.id and
+                m.channel.id == interaction.channel.id
+            )
 
         try:
             msg = await self.bot.wait_for("message", check=check, timeout=30)
             order_id = int(msg.content)
 
             order = self.bot.mem.get_order(order_id)
-
             if not order:
                 return await interaction.followup.send("❌ ไม่พบออเดอร์", ephemeral=True)
 
             user, item, amount, roblox_user, status = order
 
-            # 🔴 refund stock
-            self.bot.mem.add_stock(item, amount)
+            # 🔴 REFUND STOCK (SAFE)
+            try:
+                cur = self.bot.mem.conn.cursor()
+                cur.execute(
+                    "UPDATE stock SET qty = qty + ? WHERE name=?",
+                    (amount, item)
+                )
+                self.bot.mem.conn.commit()
+            except:
+                pass
 
-            # cancel order
+            # 🧠 FARM HOOK (future queue system)
+            try:
+                if hasattr(self.bot.order, "farm_queue"):
+                    self.bot.order.farm_queue.append({
+                        "item": item,
+                        "amount": amount,
+                        "reason": "cancel_refund"
+                    })
+            except:
+                pass
+
             self.bot.mem.update_order_status(order_id, "CANCELLED")
 
             await interaction.followup.send("✅ ยกเลิก + คืนสต๊อกแล้ว", ephemeral=True)
@@ -127,9 +151,13 @@ class AdminView(discord.ui.View):
         if not self.is_admin(interaction):
             return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
 
-        cur = self.bot.mem.conn.cursor()
-        cur.execute("SELECT name, qty, price FROM stock")
-        data = cur.fetchall()
+        try:
+            cur = self.bot.mem.conn.execute(
+                "SELECT name, qty, price FROM stock"
+            )
+            data = cur.fetchall()
+        except:
+            data = []
 
         if not data:
             return await interaction.response.send_message("❌ ไม่มีสต๊อก", ephemeral=True)
@@ -143,7 +171,7 @@ class AdminView(discord.ui.View):
 
 
 # =====================
-# 🧾 MODAL (unchanged)
+# 🧾 ADD MODAL
 # =====================
 class AddModal(discord.ui.Modal, title="Add Product"):
 
@@ -164,7 +192,10 @@ class AddModal(discord.ui.Modal, title="Add Product"):
         except:
             return await interaction.response.send_message("❌ invalid", ephemeral=True)
 
-        self.bot.stock.add(name, qty, price)
+        try:
+            self.bot.stock.add(name, qty, price)
+        except:
+            return await interaction.response.send_message("❌ error", ephemeral=True)
 
         await interaction.response.send_message(
             f"✅ เพิ่ม {name}",
