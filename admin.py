@@ -18,22 +18,18 @@ class AdminView(discord.ui.View):
             print("[ADMIN] modal error:", e)
 
     # =====================
-    # 📋 VIEW ORDERS (FILTER DONE)
+    # 📋 VIEW ORDERS (SAFE + CLEAN)
     # =====================
     @discord.ui.button(label="📋 ดูออเดอร์", style=discord.ButtonStyle.blurple)
     async def view_orders(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         try:
             orders = self.bot.mem.get_all_orders()
-        except Exception as e:
-            print("[ADMIN] get orders error:", e)
+        except:
             orders = []
 
-        # 🔥 filter DONE
-        try:
-            orders = [o for o in orders if o[-1] != "DONE"]
-        except:
-            pass
+        # 🔥 filter only active
+        orders = [o for o in orders if o and o[-1] != "DONE"]
 
         if not orders:
             await interaction.response.send_message(
@@ -44,19 +40,17 @@ class AdminView(discord.ui.View):
 
         msg = "📋 ORDER (ACTIVE)\n\n"
 
-        # 📦 limit safe
         for order in orders[:10]:
 
             try:
-                order_id, user, item, amount, roblox_user, status = order
-            except:
-                try:
-                    order_id, user, item, status = order
-                except:
-                    continue
+                # 🔒 SAFE UNPACK (future proof)
+                order = list(order) + [None] * 6
+                order_id, user, item, amount, roblox_user, status = order[:6]
 
-                amount = 1
-                roblox_user = None
+                amount = amount or 1
+
+            except:
+                continue
 
             line = (
                 f"🆔 {order_id} | 👤 {user} | "
@@ -75,7 +69,7 @@ class AdminView(discord.ui.View):
 
 
 # =====================
-# 🧾 ADD PRODUCT MODAL
+# 🧾 ADD PRODUCT MODAL (HARDENED)
 # =====================
 class AddModal(discord.ui.Modal, title="Add Product"):
 
@@ -89,9 +83,6 @@ class AddModal(discord.ui.Modal, title="Add Product"):
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        # =====================
-        # 🛡 SAFE INPUT
-        # =====================
         name = self.name.value.strip()
 
         try:
@@ -104,16 +95,14 @@ class AddModal(discord.ui.Modal, title="Add Product"):
             )
             return
 
-        if not name:
+        # 🔒 VALIDATION HARDENING
+        if not name or price < 0 or qty <= 0:
             await interaction.response.send_message(
-                "❌ ชื่อสินค้าไม่ถูกต้อง",
+                "❌ ข้อมูลไม่ถูกต้อง (invalid range)",
                 ephemeral=True
             )
             return
 
-        # =====================
-        # 📦 ADD STOCK
-        # =====================
         try:
             success = self.bot.stock.add(name, qty, price)
         except Exception as e:
@@ -127,9 +116,6 @@ class AddModal(discord.ui.Modal, title="Add Product"):
             )
             return
 
-        # =====================
-        # ✅ SUCCESS
-        # =====================
         await interaction.response.send_message(
             f"✅ เพิ่มสินค้าแล้ว\n📦 {name} | {qty} ชิ้น | {price} บาท",
             ephemeral=True
