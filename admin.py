@@ -1,4 +1,5 @@
 import discord
+import asyncio
 
 class AdminView(discord.ui.View):
 
@@ -7,7 +8,7 @@ class AdminView(discord.ui.View):
         self.bot = bot
 
     # =====================
-    # 🔐 ROLE CHECK
+    # 🔐 SAFE ROLE CHECK (FIXED)
     # =====================
     def is_admin(self, interaction: discord.Interaction):
 
@@ -16,7 +17,8 @@ class AdminView(discord.ui.View):
             if not role_id:
                 return False
 
-            return any(str(r.id) == str(role_id) for r in interaction.user.roles)
+            roles = getattr(interaction.user, "roles", [])
+            return any(str(r.id) == str(role_id) for r in roles)
 
         except:
             return False
@@ -59,7 +61,7 @@ class AdminView(discord.ui.View):
         await interaction.response.send_message(msg, ephemeral=True)
 
     # =====================
-    # ❌ CANCEL + REFUND STOCK + FARM HOOK
+    # ❌ CANCEL + 🔴 REFUND STOCK (SAFE)
     # =====================
     @discord.ui.button(label="❌ ยกเลิกออเดอร์", style=discord.ButtonStyle.red)
     async def cancel_order(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -85,21 +87,23 @@ class AdminView(discord.ui.View):
 
             user, item, amount, roblox_user, status = order
 
-            # 🔴 REFUND STOCK (SAFE)
+            # 🔴 SAFE REFUND (LOCKED)
             try:
-                cur = self.bot.mem.conn.cursor()
-                cur.execute(
-                    "UPDATE stock SET qty = qty + ? WHERE name=?",
-                    (amount, item)
-                )
-                self.bot.mem.conn.commit()
+                async with asyncio.Lock():
+                    cur = self.bot.mem.conn.cursor()
+                    cur.execute(
+                        "UPDATE stock SET qty = qty + ? WHERE name=?",
+                        (amount, item)
+                    )
+                    self.bot.mem.conn.commit()
             except:
                 pass
 
-            # 🧠 FARM HOOK (future queue system)
+            # 🧠 FARM HOOK (SAFE QUEUE SUPPORT)
             try:
-                if hasattr(self.bot.order, "farm_queue"):
-                    self.bot.order.farm_queue.append({
+                order_sys = getattr(self.bot, "order", None)
+                if order_sys and hasattr(order_sys, "farm_queue"):
+                    await order_sys.farm_queue.put({
                         "item": item,
                         "amount": amount,
                         "reason": "cancel_refund"
@@ -171,7 +175,7 @@ class AdminView(discord.ui.View):
 
 
 # =====================
-# 🧾 ADD MODAL
+# 🧾 MODAL (SAFE)
 # =====================
 class AddModal(discord.ui.Modal, title="Add Product"):
 
@@ -191,6 +195,9 @@ class AddModal(discord.ui.Modal, title="Add Product"):
             qty = int(self.stock.value)
         except:
             return await interaction.response.send_message("❌ invalid", ephemeral=True)
+
+        if price < 0 or qty <= 0:
+            return await interaction.response.send_message("❌ data invalid", ephemeral=True)
 
         try:
             self.bot.stock.add(name, qty, price)
