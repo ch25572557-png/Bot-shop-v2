@@ -4,11 +4,11 @@ class NotifySystem:
         self.bot = bot
 
     # =====================
-    # 🔧 INTERNAL SAFE CHANNEL GETTER
+    # 🔧 GET ADMIN CHANNEL (SAFE FIXED)
     # =====================
     def _get_admin_channel(self):
         try:
-            ch_id = self.brain.get("CHANNELS.ADMIN")
+            ch_id = self.brain.get("CHANNELS.ORDER_CHANNEL")
             if not ch_id:
                 return None
 
@@ -17,7 +17,7 @@ class NotifySystem:
             return None
 
     # =====================
-    # 🔔 ADMIN NOTIFY (NEW ORDER)
+    # 🔔 NEW ORDER NOTIFY (FIXED + SAFE ROLE)
     # =====================
     async def admin(self, user, item, order_id=None):
 
@@ -26,11 +26,11 @@ class NotifySystem:
             return
 
         try:
-            admin_role = self.brain.get("CHANNELS.ADMIN_ROLE")
+            role_id = self.brain.get("ROLES.ADMIN_ROLE")
 
             msg = (
                 f"🔔 NEW ORDER\n"
-                f"👤 User: {user.mention}\n"
+                f"👤 User: {getattr(user, 'mention', str(user))}\n"
                 f"📦 Item: {item}"
             )
 
@@ -38,8 +38,8 @@ class NotifySystem:
                 msg += f"\n🆔 Order ID: {order_id}"
 
             # 🔥 safe role ping
-            if admin_role:
-                msg = f"<@&{admin_role}>\n" + msg
+            if role_id:
+                msg = f"<@&{role_id}>\n" + msg
 
             await ch.send(msg)
 
@@ -58,7 +58,7 @@ class NotifySystem:
         try:
             msg = (
                 f"✅ ORDER COMPLETE\n"
-                f"👤 User: {user}\n"
+                f"👤 User: {getattr(user, 'mention', str(user))}\n"
                 f"📦 Item: {item}"
             )
 
@@ -71,7 +71,7 @@ class NotifySystem:
             print("[NOTIFY] complete error:", e)
 
     # =====================
-    # ⚠️ STOCK ALERT (FINAL SAFE VERSION)
+    # ⚠️ STOCK ALERT (SAFE + ROLE FIX)
     # =====================
     async def stock_alert(self, item, qty):
 
@@ -80,7 +80,7 @@ class NotifySystem:
             return
 
         try:
-            admin_role = self.brain.get("CHANNELS.ADMIN_ROLE")
+            role_id = self.brain.get("ROLES.ADMIN_ROLE")
 
             msg = (
                 f"⚠️ STOCK ALERT\n"
@@ -88,8 +88,8 @@ class NotifySystem:
                 f"📉 Remaining: {qty}"
             )
 
-            if admin_role:
-                msg += f"\n<@&{admin_role}>"
+            if role_id:
+                msg += f"\n<@&{role_id}>"
 
             await ch.send(msg)
 
