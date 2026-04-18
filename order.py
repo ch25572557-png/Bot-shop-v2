@@ -18,15 +18,41 @@ class OrderSystem:
         self._started = False
 
     # =====================
-    # 🚀 START WORKER
+    # 🚀 START
     # =====================
     async def start(self):
         if self._started:
             return
         self._started = True
-
         asyncio.create_task(self.farm_worker())
-        print("🧠 FARM WORKER STARTED")
+
+    # =====================
+    # 📢 ADMIN SEND (FIX 100%)
+    # =====================
+    async def send_admin(self, msg):
+        try:
+            ch_id = (
+                self.brain.get("ORDER_NOTIFY")
+                or self.brain.get("CHANNELS.ORDER_NOTIFY")
+            )
+
+            if not ch_id:
+                return
+
+            channel = None
+
+            try:
+                channel = self.bot.get_channel(int(ch_id))
+                if channel is None:
+                    channel = await self.bot.fetch_channel(int(ch_id))
+            except:
+                return
+
+            if channel:
+                await channel.send(msg)
+
+        except Exception as e:
+            print("[ADMIN SEND ERROR]", e)
 
     # =====================
     # 🛒 CREATE ORDER
@@ -49,37 +75,18 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # =====================
-        # 📢 SEND TO ADMIN CHANNEL (FIX)
-        # =====================
-        try:
-            ch_id = self.brain.get("CHANNELS.ORDER_NOTIFY")
+        # 🔥 SEND TO ADMIN (FIXED)
+        await self.send_admin(
+            f"📦 NEW ORDER #{order_id}\n"
+            f"👤 {user}\n"
+            f"📦 {item} x{amount}"
+        )
 
-            if ch_id:
-                ch = self.bot.get_channel(int(ch_id))
-                if not ch:
-                    ch = await self.bot.fetch_channel(int(ch_id))
-
-                if ch:
-                    await ch.send(
-                        f"📦 NEW ORDER #{order_id}\n"
-                        f"👤 {user}\n"
-                        f"📦 {item} x{amount}"
-                    )
-        except Exception as e:
-            print("[ADMIN SEND ERROR]", e)
-
-        # =====================
-        # NOTIFY ADMIN DM
-        # =====================
         try:
             await self.notify.admin(user, item, order_id)
         except:
             pass
 
-        # =====================
-        # BACKUP
-        # =====================
         try:
             await self.backup.log(
                 f"ORDER #{order_id} | {user} | {item} x{amount}"
@@ -87,9 +94,6 @@ class OrderSystem:
         except:
             pass
 
-        # =====================
-        # TICKET CREATE
-        # =====================
         try:
             await self.ticket.create(guild, user, order_id)
         except:
@@ -101,7 +105,6 @@ class OrderSystem:
     # 🧠 FARM WORKER
     # =====================
     async def farm_worker(self):
-
         while True:
             try:
                 task = await self.farm_queue.get()
@@ -121,107 +124,3 @@ class OrderSystem:
             except Exception as e:
                 print("[FARM ERROR]", e)
                 await asyncio.sleep(2)
-
-    # =====================
-    # 🔥 STOCK ALERT (เพิ่มให้ครบ)
-    # =====================
-    async def stock_alert(self, item, guild):
-
-        try:
-            low = int(self.brain.get("SETTINGS.LOW_STOCK") or 5)
-        except:
-            low = 5
-
-        qty = self.mem.get_stock(item)
-
-        if qty > low:
-            return
-
-        try:
-            ch_id = self.brain.get("CHANNELS.STOCK_ALERT_CHANNEL")
-            if not ch_id:
-                return
-
-            ch = self.bot.get_channel(int(ch_id))
-            if ch:
-                await ch.send(f"⚠️ STOCK LOW\n📦 {item}\n📉 เหลือ {qty}")
-        except:
-            pass
-
-    # =====================
-    # ✅ COMPLETE ORDER
-    # =====================
-    async def complete(self, channel):
-
-        order_id = self.mem.get_order_by_channel(str(channel.id))
-        if not order_id:
-            return False
-
-        data = self.mem.get_order(order_id)
-        if not data:
-            return False
-
-        user, item, amount, roblox_user, status = data
-
-        if status == "DONE":
-            return False
-
-        async with self._lock:
-            success = self.mem.minus_stock(item, amount)
-
-        allow_farm = bool(self.brain.get("SETTINGS.ALLOW_FARM_IF_NO_STOCK", False))
-
-        if not success:
-
-            if allow_farm:
-                await channel.send("⚠️ ไม่มีสต๊อก → เข้าคิวฟาร์ม")
-
-                await self.farm_queue.put({
-                    "item": item,
-                    "amount": amount,
-                    "order_id": order_id
-                })
-
-            else:
-                await channel.send("❌ สต๊อกไม่พอ")
-                return False
-
-        self.mem.update_order_status(order_id, "DONE")
-
-        point = int(self.brain.get("SETTINGS.POINT_PER_ORDER") or 0)
-
-        try:
-            self.mem.add_points(user, point)
-        except:
-            pass
-
-        try:
-            await self.stock_alert(item, channel.guild)
-        except:
-            pass
-
-        try:
-            await self.backup.log(
-                f"COMPLETE #{order_id} | {user} | {item} x{amount}"
-            )
-        except:
-            pass
-
-        try:
-            msg = f"✅ DONE\n📦 {item} x{amount}\n💰 +{point} points"
-
-            if roblox_user:
-                msg += f"\n🎮 {roblox_user}"
-
-            await channel.send(msg)
-        except:
-            pass
-
-        await asyncio.sleep(10)
-
-        try:
-            await channel.delete()
-        except:
-            pass
-
-        return True
