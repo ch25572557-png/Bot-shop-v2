@@ -14,27 +14,38 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
+# =====================
 # 🔥 INTENTS
+# =====================
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# =====================
 # 🧠 CORE
+# =====================
 bot.brain = Brain()
 bot.mem = Memory()
 
+# =====================
 # 📦 SYSTEMS
+# =====================
 bot.stock = StockSystem(bot.mem)
-bot.ticket = TicketSystem(bot.brain, bot)   # ✔ แก้
+
+# ✔ FIX: TicketSystem ต้องรับ (brain, bot)
+bot.ticket = TicketSystem(bot.brain, bot)
+
 bot.notify = NotifySystem(bot.brain, bot)
 bot.backup = BackupSystem(bot.brain, bot)
 
-# 🛒 ORDER
+# =====================
+# 🛒 ORDER SYSTEM
+# =====================
 bot.order = OrderSystem(
     bot.mem,
     bot.ticket,
     bot.notify,
     bot.backup,
-    bot.brain   # ✔ เพิ่ม
+    bot.brain
 )
 
 # =====================
@@ -42,21 +53,42 @@ bot.order = OrderSystem(
 # =====================
 @bot.event
 async def on_ready():
+
     print("🟢 FULL SHOP SYSTEM ONLINE")
+
+    # 🔥 persistent UI (สำคัญมาก)
+    try:
+        bot.add_view(ShopView(bot))
+        bot.add_view(AdminView(bot))
+    except Exception as e:
+        print("[VIEW REGISTER ERROR]", e)
+
 
 # =====================
 # 💬 COMMANDS
 # =====================
-
 @bot.command()
 async def shop(ctx):
-    await ctx.send("🛒 SHOP ONLINE", view=ShopView(bot))
+    try:
+        await ctx.send("🛒 SHOP ONLINE", view=ShopView(bot))
+    except Exception as e:
+        print("[SHOP CMD ERROR]", e)
+
 
 @bot.command()
 async def admin(ctx):
-    await ctx.send("🛠 ADMIN PANEL", view=AdminView(bot))
+    try:
+        await ctx.send("🛠 ADMIN PANEL", view=AdminView(bot))
+    except Exception as e:
+        print("[ADMIN CMD ERROR]", e)
+
 
 # =====================
-# 🚀 RUN
+# 🚀 SAFE RUN
 # =====================
-bot.run(os.getenv("DISCORD_TOKEN"))
+token = os.getenv("DISCORD_TOKEN")
+
+if not token:
+    print("❌ Missing DISCORD_TOKEN")
+else:
+    bot.run(token)
