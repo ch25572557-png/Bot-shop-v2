@@ -1,3 +1,6 @@
+import asyncio
+import time
+
 class OrderSystem:
     def __init__(self, mem, ticket, notify, backup, brain):
         self.mem = mem
@@ -6,12 +9,14 @@ class OrderSystem:
         self.backup = backup
         self.brain = brain
 
+        # 🟡 cooldown storage
+        self.last_alert = {}
+
     # =====================
     # 🛒 CREATE ORDER
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
-        # 🔒 กัน input พัง
         try:
             amount = int(amount)
             if amount <= 0:
@@ -19,7 +24,6 @@ class OrderSystem:
         except:
             amount = 1
 
-        # 🟢 create order
         order_id = self.mem.add_order(
             str(user),
             item,
@@ -28,13 +32,11 @@ class OrderSystem:
             "WAIT"
         )
 
-        # 📢 notify admin
         try:
             await self.notify.admin(user, item, order_id)
         except:
             pass
 
-        # 💾 backup log
         try:
             await self.backup.log(
                 f"ORDER #{order_id} | {user} | {item} x{amount} | {roblox_user}"
@@ -42,9 +44,42 @@ class OrderSystem:
         except:
             pass
 
-        # 🎫 create ticket
         try:
             await self.ticket.create(guild, user, order_id)
+        except:
+            pass
+
+    # =====================
+    # 🔥 STOCK ALERT SYSTEM
+    # =====================
+    async def stock_alert(self, item, channel):
+
+        LOW_STOCK = int(self.brain.get("SETTINGS.LOW_STOCK") or 5)
+        COOLDOWN = int(self.brain.get("SETTINGS.COOLDOWN") or 3)
+
+        qty = self.mem.get_stock(item)
+
+        if qty > LOW_STOCK:
+            return
+
+        now = time.time()
+
+        # ⏳ cooldown กัน spam
+        if item in self.last_alert:
+            if now - self.last_alert[item] < COOLDOWN * 60:
+                return
+
+        self.last_alert[item] = now
+
+        try:
+            admin_ch = channel.guild.get_channel(
+                int(self.brain.get("CHANNELS.ADMIN"))
+            )
+
+            if admin_ch:
+                await admin_ch.send(
+                    f"⚠️ STOCK ALERT\n📦 {item}\n📉 เหลือ {qty}"
+                )
         except:
             pass
 
@@ -53,17 +88,14 @@ class OrderSystem:
     # =====================
     async def complete(self, channel):
 
-        # 🔍 หา order_id จาก channel
         order_id = self.mem.get_order_by_channel(str(channel.id))
         if not order_id:
             return False
 
-        # 🔍 ดึงข้อมูล order
         data = self.mem.get_order(order_id)
         if not data:
             return False
 
-        # 🧠 รองรับโครงใหม่ (และ fallback เผื่อ)
         try:
             user, item, amount, roblox_user, status = data
         except:
@@ -71,12 +103,11 @@ class OrderSystem:
             amount = 1
             roblox_user = None
 
-        # ❗ กันกดซ้ำ
         if status == "DONE":
             return False
 
         # =====================
-        # 📦 MINUS STOCK (ทำก่อน)
+        # 📦 MINUS STOCK (ก่อน DONE)
         # =====================
         success = self.mem.minus_stock(item, amount)
 
@@ -93,7 +124,7 @@ class OrderSystem:
         self.mem.update_order_status(order_id, "DONE")
 
         # =====================
-        # 💰 ADD POINT
+        # 💰 POINTS
         # =====================
         try:
             point = int(self.brain.get("SETTINGS.POINT_PER_ORDER"))
@@ -106,7 +137,12 @@ class OrderSystem:
             pass
 
         # =====================
-        # 💾 BACKUP LOG
+        # 🔥 STOCK ALERT CHECK
+        # =====================
+        await self.stock_alert(item, channel)
+
+        # =====================
+        # 💾 BACKUP
         # =====================
         try:
             await self.backup.log(
@@ -116,30 +152,27 @@ class OrderSystem:
             pass
 
         # =====================
-        # 📢 แจ้งในห้อง
+        # 📢 MESSAGE
         # =====================
         try:
             msg = (
                 f"✅ ออเดอร์เสร็จแล้ว\n"
                 f"📦 {item} x{amount}\n"
+                f"💰 +{point} points\n"
             )
 
             if roblox_user:
                 msg += f"🎮 Roblox: {roblox_user}\n"
 
-            msg += (
-                f"💰 +{point} points\n"
-                f"⏳ ห้องจะปิดใน 10 วินาที..."
-            )
+            msg += "⏳ ห้องจะปิดใน 10 วินาที..."
 
             await channel.send(msg)
         except:
             pass
 
         # =====================
-        # ⏱️ DELAY CLOSE
+        # ⏱ CLOSE
         # =====================
-        import asyncio
         await asyncio.sleep(10)
 
         try:
