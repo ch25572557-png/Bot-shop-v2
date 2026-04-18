@@ -1,12 +1,17 @@
 import threading
+import time
+import discord
+import asyncio
 
 class StockSystem:
-    def __init__(self, mem):
+    def __init__(self, mem, bot=None):
         self.mem = mem
+        self.bot = bot
         self.lock = threading.Lock()
+        self.running = False
 
     # =====================
-    # 📦 MINUS STOCK (SAFE + NO NEGATIVE)
+    # 📦 MINUS STOCK
     # =====================
     def minus(self, item, amount=1):
 
@@ -19,7 +24,6 @@ class StockSystem:
             with self.lock:
                 cur = self.mem.conn.cursor()
 
-                # 🔒 safe atomic + prevent negative
                 cur.execute(
                     """
                     UPDATE stock
@@ -30,7 +34,6 @@ class StockSystem:
                 )
 
                 self.mem.conn.commit()
-
                 return cur.rowcount > 0
 
         except Exception as e:
@@ -38,7 +41,7 @@ class StockSystem:
             return False
 
     # =====================
-    # ➕ ADD STOCK (SAFE UPSERT FIXED)
+    # ➕ ADD STOCK
     # =====================
     def add(self, name, qty, price):
 
@@ -56,7 +59,6 @@ class StockSystem:
             with self.lock:
                 cur = self.mem.conn.cursor()
 
-                # 🔍 exists check
                 cur.execute(
                     "SELECT qty FROM stock WHERE name=?",
                     (name,)
@@ -64,7 +66,6 @@ class StockSystem:
                 result = cur.fetchone()
 
                 if result:
-                    # ⚠️ only update qty, NOT overwrite price blindly (safer)
                     cur.execute(
                         """
                         UPDATE stock
@@ -90,7 +91,7 @@ class StockSystem:
             return False
 
     # =====================
-    # 📊 GET STOCK (THREAD SAFE READ)
+    # 📊 GET STOCK
     # =====================
     def get(self, item):
 
@@ -108,3 +109,66 @@ class StockSystem:
         except Exception as e:
             print("[STOCK] get error:", e)
             return 0
+
+    # =====================
+    # 🚀 START LOOP (IMPORTANT)
+    # =====================
+    def start(self):
+        if self.running:
+            return
+
+        self.running = True
+        thread = threading.Thread(target=self._loop, daemon=True)
+        thread.start()
+
+        print("📦 STOCK MONITOR STARTED")
+
+    # =====================
+    # 🔁 MONITOR LOOP
+    # =====================
+    def _loop(self):
+        while self.running:
+            try:
+                with self.lock:
+                    cur = self.mem.conn.cursor()
+                    cur.execute("SELECT name, qty FROM stock")
+                    items = cur.fetchall()
+
+                for name, qty in items:
+
+                    if qty <= 5:
+                        self._notify(name, qty)
+
+                time.sleep(10)
+
+            except Exception as e:
+                print("[STOCK LOOP ERROR]", e)
+                time.sleep(5)
+
+    # =====================
+    # 📢 NOTIFY (EMBED)
+    # =====================
+    def _notify(self, name, qty):
+        if not self.bot:
+            return
+
+        channel = None
+
+        # หา channel ชื่อ stock-alert
+        for c in self.bot.get_all_channels():
+            if c.name == "stock-alert":
+                channel = c
+                break
+
+        if not channel:
+            return
+
+        embed = discord.Embed(
+            title="📦 Stock Alert",
+            description=f"สินค้า `{name}` ใกล้หมดแล้ว",
+            color=0xffcc00
+        )
+
+        embed.add_field(name="คงเหลือ", value=str(qty), inline=False)
+
+        asyncio.create_task(channel.send(embed=embed))
