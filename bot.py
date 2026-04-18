@@ -50,25 +50,34 @@ bot.order = OrderSystem(
 )
 
 # =====================
-# 🚀 READY (FIXED PROPER LOOP START)
+# 🚀 READY
 # =====================
 @bot.event
 async def on_ready():
+
     print(f"🟢 LOGGED IN AS {bot.user}")
 
+    # =====================
+    # 🎛 VIEW REGISTER SAFE
+    # =====================
     try:
         bot.add_view(ShopView(bot))
         bot.add_view(AdminView(bot))
     except Exception as e:
         print("[VIEW REGISTER ERROR]", e)
 
-    # 🔥 FIX: ใช้ start() แทน create_task ตรงๆ
-    if not hasattr(bot, "farm_started"):
+    # =====================
+    # 🧠 FARM START SAFE (FIXED)
+    # =====================
+    if not getattr(bot, "farm_started", False):
+
         bot.farm_started = True
 
-        await bot.order.start()
-
-        print("🧠 FARM WORKER STARTED")
+        try:
+            await bot.order.start()
+            print("🧠 FARM WORKER STARTED")
+        except Exception as e:
+            print("[FARM START ERROR]", e)
 
 # =====================
 # 💬 COMMANDS
