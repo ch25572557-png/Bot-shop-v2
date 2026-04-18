@@ -13,8 +13,11 @@ class OrderSystem:
         self.last_alert = {}
         self._lock = asyncio.Lock()
 
-        # 🧠 FARM QUEUE (NEW)
-        self.farm_queue = []
+        # 🧠 FARM QUEUE (SAFE REAL QUEUE)
+        self.farm_queue = asyncio.Queue()
+
+        # start worker
+        asyncio.create_task(self.farm_worker())
 
     # =====================
     # 🛒 CREATE ORDER
@@ -37,17 +40,11 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # =====================
-        # 🔔 SAFE NOTIFY
-        # =====================
         try:
             await self.notify.admin(user, item, order_id)
         except:
             pass
 
-        # =====================
-        # 💾 BACKUP
-        # =====================
         try:
             await self.backup.log(
                 f"ORDER #{order_id} | {user} | {item} x{amount}"
@@ -55,17 +52,12 @@ class OrderSystem:
         except:
             pass
 
-        # =====================
-        # 🎫 TICKET
-        # =====================
         try:
             await self.ticket.create(guild, user, order_id)
         except:
             pass
 
-        # =====================
-        # 📊 DASHBOARD HOOK (NEW)
-        # =====================
+        # 📊 dashboard hook
         try:
             if hasattr(self, "on_dashboard_update"):
                 await self.on_dashboard_update()
@@ -75,7 +67,7 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # 🔥 STOCK ALERT (SAFE)
+    # 🔥 STOCK ALERT SAFE
     # =====================
     async def stock_alert(self, item, guild):
 
@@ -111,26 +103,20 @@ class OrderSystem:
             pass
 
     # =====================
-    # 🧠 FARM QUEUE RUNNER (NEW REAL SYSTEM)
+    # 🧠 FARM WORKER (REAL QUEUE SYSTEM)
     # =====================
     async def farm_worker(self):
 
         while True:
-
             try:
-                if not self.farm_queue:
-                    await asyncio.sleep(2)
-                    continue
+                task = await self.farm_queue.get()
 
-                task = self.farm_queue.pop(0)
+                item = task["item"]
+                amount = task["amount"]
 
-                item = task.get("item")
-                amount = task.get("amount", 1)
+                await asyncio.sleep(3)  # simulate farm delay
 
-                # 🔁 simulate farming delay
-                await asyncio.sleep(3)
-
-                # 📦 add stock back (farm success)
+                # add stock back
                 cur = self.mem.conn.cursor()
                 cur.execute(
                     "UPDATE stock SET qty = qty + ? WHERE name=?",
@@ -176,11 +162,9 @@ class OrderSystem:
         if not success:
 
             if allow_farm:
-
                 await channel.send("⚠️ ไม่มีสต๊อก → เข้าคิวฟาร์ม")
 
-                # 🧠 ADD TO FARM QUEUE (NEW)
-                self.farm_queue.append({
+                await self.farm_queue.put({
                     "item": item,
                     "amount": amount,
                     "order_id": order_id
@@ -191,17 +175,14 @@ class OrderSystem:
                 return False
 
         # =====================
-        # 🔄 UPDATE STATUS
+        # 🔄 STATUS
         # =====================
         self.mem.update_order_status(order_id, "DONE")
 
         # =====================
         # 💰 POINTS
         # =====================
-        try:
-            point = int(self.brain.get("SETTINGS.POINT_PER_ORDER") or 0)
-        except:
-            point = 0
+        point = int(self.brain.get("SETTINGS.POINT_PER_ORDER") or 0)
 
         try:
             self.mem.add_points(user, point)
@@ -218,7 +199,7 @@ class OrderSystem:
 
         # =====================
         # 💾 BACKUP
-        =====================
+        # =====================
         try:
             await self.backup.log(
                 f"COMPLETE #{order_id} | {user} | {item} x{amount}"
@@ -235,15 +216,10 @@ class OrderSystem:
             if roblox_user:
                 msg += f"\n🎮 {roblox_user}"
 
-            msg += "\n⏳ closing..."
-
             await channel.send(msg)
         except:
             pass
 
-        # =====================
-        # ⏱ CLOSE
-        # =====================
         await asyncio.sleep(10)
 
         try:
