@@ -1,4 +1,5 @@
 import asyncio
+import discord
 
 class OrderSystem:
     def __init__(self, mem, ticket, notify, backup, brain, bot):
@@ -13,7 +14,6 @@ class OrderSystem:
         self._lock = asyncio.Lock()
         self.farm_queue = asyncio.Queue()
         self._started = False
-
         self.processing = set()
 
     # =====================
@@ -26,22 +26,29 @@ class OrderSystem:
         asyncio.create_task(self.farm_worker())
 
     # =====================
-    # 📢 ADMIN SEND
+    # 📢 ADMIN (EMBED FIX)
     # =====================
-    async def send_admin(self, msg):
+    async def send_admin(self, title, desc, color=0x00ffcc):
         try:
             ch_id = self.brain.get("CHANNELS.ORDER_NOTIFY")
             if not ch_id:
                 return
 
             channel = self.bot.get_channel(int(ch_id)) or await self.bot.fetch_channel(int(ch_id))
+
             if channel:
-                await channel.send(msg)
-        except:
-            pass
+                embed = discord.Embed(
+                    title=title,
+                    description=desc,
+                    color=color
+                )
+                await channel.send(embed=embed)
+
+        except Exception as e:
+            print("[ADMIN SEND ERROR]", e)
 
     # =====================
-    # 📢 SEND TO TICKET (🔥 FIX)
+    # 📢 TICKET (EMBED FIX)
     # =====================
     async def send_ticket(self, order_id, msg):
         try:
@@ -52,13 +59,18 @@ class OrderSystem:
             channel = self.bot.get_channel(int(channel_id)) or await self.bot.fetch_channel(int(channel_id))
 
             if channel:
-                await channel.send(f"📊 STATUS UPDATE\n{msg}")
+                embed = discord.Embed(
+                    title="📊 STATUS UPDATE",
+                    description=msg,
+                    color=0x3498db
+                )
+                await channel.send(embed=embed)
 
         except Exception as e:
             print("[TICKET STATUS ERROR]", e)
 
     # =====================
-    # 🛒 CREATE ORDER
+    # 🛒 CREATE ORDER (EMBED FIX)
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
@@ -79,9 +91,11 @@ class OrderSystem:
             return False
 
         await self.send_admin(
-            f"📦 NEW ORDER #{order_id}\n"
-            f"👤 {user}\n"
-            f"📦 {item} x{amount}"
+            "📦 NEW ORDER",
+            f"**Order ID:** #{order_id}\n"
+            f"👤 User: {user}\n"
+            f"📦 Item: {item} x{amount}",
+            0x00ffcc
         )
 
         await self.notify.admin(user, item, order_id)
@@ -91,7 +105,7 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # ✅ COMPLETE (🔥 FIX CLOSE + STATUS SAFE)
+    # ✅ COMPLETE ORDER
     # =====================
     async def complete(self, channel):
 
@@ -127,29 +141,34 @@ class OrderSystem:
             self.mem.add_points(user, point)
 
             # =====================
-            # 📢 ADMIN
+            # 📢 ADMIN EMBED
             # =====================
             await self.send_admin(
-                f"✅ COMPLETE #{order_id}\n📦 {item} x{amount}"
+                "✅ ORDER COMPLETED",
+                f"Order #{order_id}\n📦 {item} x{amount}\n💰 +{point} points",
+                0x00ff00
             )
 
             # =====================
-            # 📢 TICKET UPDATE (🔥 FIX)
+            # 📢 TICKET EMBED
             # =====================
             await self.send_ticket(order_id, "✅ ส่งของเสร็จแล้ว")
 
-            await channel.send(
-                f"✅ DONE\n📦 {item} x{amount}\n💰 +{point} points"
+            # =====================
+            # 👤 CHANNEL RESPONSE
+            # =====================
+            embed = discord.Embed(
+                title="✅ DONE",
+                description=f"{item} x{amount}\n💰 +{point} points",
+                color=0x00ff00
             )
+            await channel.send(embed=embed)
 
             # =====================
-            # 🔒 CLOSE CHANNEL (🔥 FIX REAL)
+            # 🔒 CLOSE CHANNEL
             # =====================
-            try:
-                await asyncio.sleep(3)
-                await channel.delete(reason="Order completed")
-            except Exception as e:
-                print("[DELETE CHANNEL ERROR]", e)
+            await asyncio.sleep(3)
+            await channel.delete(reason="Order completed")
 
             return True
 
@@ -163,7 +182,6 @@ class OrderSystem:
         while True:
             try:
                 task = await self.farm_queue.get()
-
                 await asyncio.sleep(3)
 
                 cur = self.mem.conn.cursor()
@@ -173,5 +191,6 @@ class OrderSystem:
                 )
                 self.mem.conn.commit()
 
-            except:
+            except Exception as e:
+                print("[FARM ERROR]", e)
                 await asyncio.sleep(2)
