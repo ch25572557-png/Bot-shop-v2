@@ -12,7 +12,7 @@ class Memory:
         self.lock = threading.Lock()
 
         # =====================
-        # ⚙️ DB MODE (SAFE)
+        # ⚙️ DB SAFE MODE
         # =====================
         with self.lock:
             self.conn.execute("PRAGMA journal_mode=WAL")
@@ -70,9 +70,10 @@ class Memory:
         self.conn.commit()
 
     # =====================
-    # 📦 ORDER
+    # 📦 ORDER SYSTEM
     # =====================
     def add_order(self, user, item, amount=1, roblox_user=None, status="WAIT"):
+
         try:
             amount = max(int(amount), 1)
         except:
@@ -95,7 +96,7 @@ class Memory:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT id,user,item,amount,roblox_user,status FROM orders WHERE id=?",
+                "SELECT user,item,amount,roblox_user,status FROM orders WHERE id=?",
                 (order_id,)
             )
             return cur.fetchone()
@@ -120,8 +121,8 @@ class Memory:
                     (status, order_id)
                 )
                 self.conn.commit()
-        except Exception as e:
-            print("[MEMORY] update_order_status error:", e)
+        except:
+            pass
 
     # =====================
     # 🎫 TICKET
@@ -162,9 +163,10 @@ class Memory:
             return None
 
     # =====================
-    # 📦 STOCK (SAFE + FARM SUPPORT)
+    # 📦 STOCK (SAFE + FARM READY)
     # =====================
     def minus_stock(self, item, amount=1):
+
         try:
             amount = max(int(amount), 1)
         except:
@@ -173,19 +175,48 @@ class Memory:
         try:
             with self.lock:
                 cur = self.conn.cursor()
+
+                # 🔴 SAFE: กันติดลบ
                 cur.execute(
-                    "UPDATE stock SET qty = qty - ? WHERE name=?",
-                    (amount, item)
+                    "UPDATE stock SET qty = qty - ? WHERE name=? AND qty >= ?",
+                    (amount, item, amount)
                 )
+
                 self.conn.commit()
-                return True
+
+                return cur.rowcount > 0
+
         except:
             return False
+
+    def add_stock(self, item, amount):
+
+        try:
+            amount = max(int(amount), 1)
+        except:
+            amount = 1
+
+        try:
+            with self.lock:
+                self.conn.execute("""
+                    INSERT INTO stock(name, qty, price)
+                    VALUES(?, ?, 0)
+                    ON CONFLICT(name)
+                    DO UPDATE SET qty = qty + ?
+                """, (item, amount, amount))
+
+                self.conn.commit()
+
+        except:
+            pass
 
     def get_stock(self, item):
         try:
             cur = self.conn.cursor()
-            cur.execute("SELECT qty FROM stock WHERE name=?", (item,))
+            cur.execute(
+                "SELECT qty FROM stock WHERE name=?",
+                (item,)
+            )
             row = cur.fetchone()
             return row[0] if row else 0
         except:
@@ -210,7 +241,10 @@ class Memory:
     def get_points(self, user):
         try:
             cur = self.conn.cursor()
-            cur.execute("SELECT point FROM points WHERE user=?", (user,))
+            cur.execute(
+                "SELECT point FROM points WHERE user=?",
+                (user,)
+            )
             row = cur.fetchone()
             return row[0] if row else 0
         except:
