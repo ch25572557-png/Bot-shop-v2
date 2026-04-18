@@ -6,14 +6,12 @@ class StockSystem:
         self.lock = threading.Lock()
 
     # =====================
-    # 📦 MINUS STOCK (ATOMIC + SAFE FINAL)
+    # 📦 MINUS STOCK (SAFE + NO NEGATIVE)
     # =====================
     def minus(self, item, amount=1):
 
         try:
-            amount = int(amount)
-            if amount <= 0:
-                amount = 1
+            amount = max(int(amount), 1)
         except:
             amount = 1
 
@@ -21,6 +19,7 @@ class StockSystem:
             with self.lock:
                 cur = self.mem.conn.cursor()
 
+                # 🔒 safe atomic + prevent negative
                 cur.execute(
                     """
                     UPDATE stock
@@ -39,21 +38,25 @@ class StockSystem:
             return False
 
     # =====================
-    # ➕ ADD STOCK (SAFE UPSERT STYLE)
+    # ➕ ADD STOCK (SAFE UPSERT FIXED)
     # =====================
     def add(self, name, qty, price):
 
         try:
+            name = str(name).strip()
             qty = int(qty)
             price = float(price)
         except:
+            return False
+
+        if not name or qty <= 0 or price < 0:
             return False
 
         try:
             with self.lock:
                 cur = self.mem.conn.cursor()
 
-                # 🔍 check exists
+                # 🔍 exists check
                 cur.execute(
                     "SELECT qty FROM stock WHERE name=?",
                     (name,)
@@ -61,13 +64,14 @@ class StockSystem:
                 result = cur.fetchone()
 
                 if result:
+                    # ⚠️ only update qty, NOT overwrite price blindly (safer)
                     cur.execute(
                         """
                         UPDATE stock
-                        SET qty = qty + ?, price = ?
+                        SET qty = qty + ?
                         WHERE name = ?
                         """,
-                        (qty, price, name)
+                        (qty, name)
                     )
                 else:
                     cur.execute(
@@ -86,19 +90,20 @@ class StockSystem:
             return False
 
     # =====================
-    # 📊 GET STOCK (SAFE READ)
+    # 📊 GET STOCK (THREAD SAFE READ)
     # =====================
     def get(self, item):
 
         try:
-            cur = self.mem.conn.cursor()
-            cur.execute(
-                "SELECT qty FROM stock WHERE name=?",
-                (item,)
-            )
+            with self.lock:
+                cur = self.mem.conn.cursor()
+                cur.execute(
+                    "SELECT qty FROM stock WHERE name=?",
+                    (item,)
+                )
 
-            result = cur.fetchone()
-            return result[0] if result else 0
+                result = cur.fetchone()
+                return result[0] if result else 0
 
         except Exception as e:
             print("[STOCK] get error:", e)
