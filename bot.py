@@ -1,5 +1,6 @@
 import discord
 import os
+import asyncio
 from discord.ext import commands
 
 from brain import Brain
@@ -14,9 +15,6 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
-# =====================
-# 🔥 INTENTS (FIX: message_content สำคัญมาก)
-# =====================
 intents = discord.Intents.all()
 intents.message_content = True
 
@@ -32,7 +30,6 @@ bot.mem = Memory()
 # 📦 SYSTEMS
 # =====================
 bot.stock = StockSystem(bot.mem)
-
 bot.ticket = TicketSystem(bot.brain, bot)
 bot.notify = NotifySystem(bot.brain, bot)
 bot.backup = BackupSystem(bot.brain, bot)
@@ -49,18 +46,23 @@ bot.order = OrderSystem(
 )
 
 # =====================
-# 🚀 READY
+# 🚀 READY (FIXED)
 # =====================
 @bot.event
 async def on_ready():
     print(f"🟢 LOGGED IN AS {bot.user}")
 
-    # 🔥 persistent UI
     try:
         bot.add_view(ShopView(bot))
         bot.add_view(AdminView(bot))
     except Exception as e:
         print("[VIEW REGISTER ERROR]", e)
+
+    # 🔥 FIX: START FARM WORKER AFTER LOOP READY
+    if not hasattr(bot, "farm_started"):
+        bot.farm_started = True
+        bot.loop.create_task(bot.order.farm_worker())
+        print("🧠 FARM WORKER STARTED")
 
 
 # =====================
@@ -68,18 +70,12 @@ async def on_ready():
 # =====================
 @bot.command()
 async def shop(ctx):
-    try:
-        await ctx.send("🛒 SHOP ONLINE", view=ShopView(bot))
-    except Exception as e:
-        print("[SHOP CMD ERROR]", e)
+    await ctx.send("🛒 SHOP ONLINE", view=ShopView(bot))
 
 
 @bot.command()
 async def admin(ctx):
-    try:
-        await ctx.send("🛠 ADMIN PANEL", view=AdminView(bot))
-    except Exception as e:
-        print("[ADMIN CMD ERROR]", e)
+    await ctx.send("🛠 ADMIN PANEL", view=AdminView(bot))
 
 
 # =====================
