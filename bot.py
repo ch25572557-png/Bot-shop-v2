@@ -14,8 +14,10 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
-# 🆕 CANCEL SYSTEM
+# 🆕 SYSTEMS
 from cancel_view import CancelView
+from admin_dashboard import AdminDashboard
+from stock_view import StockView
 
 
 # =====================
@@ -24,11 +26,13 @@ from cancel_view import CancelView
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+
 # =====================
 # 🧠 CORE
 # =====================
 bot.brain = Brain()
 bot.mem = Memory()
+
 
 # =====================
 # 📦 SYSTEMS
@@ -47,6 +51,7 @@ bot.order = OrderSystem(
     bot
 )
 
+
 # =====================
 # 🚀 READY EVENT
 # =====================
@@ -58,18 +63,22 @@ async def on_ready():
         return
     bot.ready_done = True
 
+
     # =====================
     # 🎛 REGISTER VIEWS
     # =====================
     try:
         bot.add_view(ShopView(bot))
         bot.add_view(AdminView(bot))
-        bot.add_view(CancelView(bot))  # ✅ FIXED
+        bot.add_view(CancelView(bot))
+        bot.add_view(StockView(bot))
+        bot.add_view(AdminDashboard(bot))
 
-        print("✅ VIEWS REGISTERED")
+        print("✅ ALL VIEWS REGISTERED")
 
     except Exception as e:
         print("[VIEW REGISTER ERROR]", e)
+
 
     # =====================
     # 📦 STOCK START
@@ -80,6 +89,7 @@ async def on_ready():
             print("📦 STOCK SYSTEM STARTED")
     except Exception as e:
         print("[STOCK START ERROR]", e)
+
 
     # =====================
     # 🛒 ORDER START
@@ -94,6 +104,7 @@ async def on_ready():
 
     except Exception as e:
         print("[ORDER START ERROR]", e)
+
 
 # =====================
 # 💬 COMMANDS
@@ -116,6 +127,16 @@ async def admin(ctx):
         color=0xffcc00
     )
     await ctx.send(embed=embed, view=AdminView(bot))
+
+
+@bot.command()
+async def dashboard(ctx):
+    embed = discord.Embed(
+        title="🧠 ADMIN DASHBOARD",
+        description="จัดการระบบทั้งหมด",
+        color=0x2ecc71
+    )
+    await ctx.send(embed=embed, view=AdminDashboard(bot))
 
 
 # =====================
