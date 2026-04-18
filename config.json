@@ -9,6 +9,10 @@
   "SETTINGS": {
     "POINT_PER_ORDER": 10,
     "LOW_STOCK": 5,
-    "COOLDOWN": 3
+    "COOLDOWN": 3,
+
+    "AUTO_ALERT": true,
+    "AUTO_CLOSE_TICKET": true,
+    "STOCK_ALERT_COOLDOWN_SEC": 60
   }
 }
