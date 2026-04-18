@@ -27,20 +27,27 @@ class StatusView(discord.ui.View):
             return interaction.user.guild_permissions.administrator
 
     # =====================
-    # 📢 SEND TO TICKET (EMBED FIX)
+    # 📢 SEND EMBED STATUS
     # =====================
-    async def send_ticket(self, interaction, status):
-        try:
-            embed = discord.Embed(
-                title="📊 STATUS UPDATE",
-                description=f"🎫 Order #{self.order_id}\n🔄 {status}",
-                color=0x3498db
-            )
+    async def send_ticket(self, interaction, status, color=0x3498db):
 
-            await interaction.channel.send(embed=embed)
+        color_map = {
+            "WAIT_ADMIN": 0x95a5a6,
+            "ADMIN_ACCEPTED": 0x3498db,
+            "FARMING": 0x2ecc71,
+            "WAIT_CUSTOMER": 0xf1c40f,
+            "DONE": 0x2ecc71
+        }
 
-        except Exception as e:
-            print("[TICKET STATUS ERROR]", e)
+        embed = discord.Embed(
+            title="📊 STATUS UPDATE",
+            description=f"🎫 Order #{self.order_id}",
+            color=color_map.get(status, color)
+        )
+
+        embed.add_field(name="🔄 Status", value=status, inline=False)
+
+        await interaction.channel.send(embed=embed)
 
     # =====================
     # ⛔ BLOCK NON ADMIN
@@ -63,7 +70,10 @@ class StatusView(discord.ui.View):
         self.bot.mem.update_order_status(self.order_id, "WAIT_ADMIN")
         await self.send_ticket(interaction, "WAIT_ADMIN")
 
-        await interaction.response.send_message("⏳ WAIT_ADMIN", ephemeral=True)
+        await interaction.response.send_message(
+            "✅ ตั้งค่า WAIT_ADMIN แล้ว",
+            ephemeral=True
+        )
 
     # =====================
     # 👨‍💼 ACCEPT
@@ -74,7 +84,10 @@ class StatusView(discord.ui.View):
         self.bot.mem.update_order_status(self.order_id, "ADMIN_ACCEPTED")
         await self.send_ticket(interaction, "ADMIN_ACCEPTED")
 
-        await interaction.response.send_message("👨‍💼 ADMIN_ACCEPTED", ephemeral=True)
+        await interaction.response.send_message(
+            "✅ รับออเดอร์แล้ว",
+            ephemeral=True
+        )
 
     # =====================
     # 🪏 FARMING
@@ -85,7 +98,10 @@ class StatusView(discord.ui.View):
         self.bot.mem.update_order_status(self.order_id, "FARMING")
         await self.send_ticket(interaction, "FARMING")
 
-        await interaction.response.send_message("🪏 FARMING", ephemeral=True)
+        await interaction.response.send_message(
+            "🪏 เริ่มฟาร์มแล้ว",
+            ephemeral=True
+        )
 
     # =====================
     # 📦 WAIT CUSTOMER
@@ -96,10 +112,13 @@ class StatusView(discord.ui.View):
         self.bot.mem.update_order_status(self.order_id, "WAIT_CUSTOMER")
         await self.send_ticket(interaction, "WAIT_CUSTOMER")
 
-        await interaction.response.send_message("📦 WAIT_CUSTOMER", ephemeral=True)
+        await interaction.response.send_message(
+            "📦 รอลูกค้าแล้ว",
+            ephemeral=True
+        )
 
     # =====================
-    # ✅ DONE (CLEAN FINISH)
+    # ✅ DONE
     # =====================
     @discord.ui.button(label="✅ ส่งของเสร็จแล้ว", style=discord.ButtonStyle.red)
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -117,6 +136,5 @@ class StatusView(discord.ui.View):
 
         try:
             await self.bot.order.complete(interaction.channel)
-
         except Exception as e:
             print("[STATUS COMPLETE ERROR]", e)
