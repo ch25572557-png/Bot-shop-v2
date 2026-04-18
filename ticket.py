@@ -7,12 +7,12 @@ class TicketSystem:
         self.bot = bot
 
     # =====================
-    # 🎫 CREATE TICKET (SAFE + FINAL)
+    # 🎫 CREATE TICKET (FINAL SAFE VERSION)
     # =====================
     async def create(self, guild, user, order_id):
 
         # =====================
-        # 📁 CATEGORY SAFE RESOLVE
+        # 📁 CATEGORY RESOLVE (STRICT TYPE SAFE)
         # =====================
         category = None
 
@@ -22,17 +22,23 @@ class TicketSystem:
             if category_id:
                 category_id = int(category_id)
 
-                category = guild.get_channel(category_id)
+                ch = guild.get_channel(category_id)
 
-                if category is None:
+                # 🔥 MUST check type
+                if isinstance(ch, discord.CategoryChannel):
+                    category = ch
+                else:
                     category = await guild.fetch_channel(category_id)
+
+                    if not isinstance(category, discord.CategoryChannel):
+                        category = None
 
         except Exception as e:
             print("[TICKET] category error:", e)
             category = None
 
         # =====================
-        # 🔒 PERMISSIONS (SAFE)
+        # 🔒 PERMISSIONS SAFE
         # =====================
         try:
             overwrites = {
@@ -54,7 +60,7 @@ class TicketSystem:
                 overwrites=overwrites
             )
         except Exception as e:
-            print("[TICKET] create channel error:", e)
+            print("[TICKET] create error:", e)
             return None
 
         # =====================
@@ -76,14 +82,14 @@ class TicketSystem:
             data = self.bot.mem.get_order(order_id)
 
             if data:
-                data = list(data) + [None] * 5
+                data = list(data) + [None]*5
                 user_db, item, amount, roblox_user, status = data[:5]
 
         except Exception as e:
             print("[TICKET] order load error:", e)
 
         # =====================
-        # 📢 MESSAGE (SAFE BUILD)
+        # 📢 MESSAGE + STATUS VIEW
         # =====================
         try:
             msg = (
