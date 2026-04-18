@@ -14,7 +14,7 @@ class AdminView(discord.ui.View):
         await interaction.response.send_modal(AddModal(self.bot))
 
     # =====================
-    # 📋 VIEW ORDERS
+    # 📋 VIEW ORDERS (ซ่อน DONE)
     # =====================
     @discord.ui.button(label="📋 ดูออเดอร์", style=discord.ButtonStyle.blurple)
     async def view_orders(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -24,16 +24,31 @@ class AdminView(discord.ui.View):
         except:
             orders = []
 
+        # 🔥 ซ่อน DONE
+        orders = [o for o in orders if o[-1] != "DONE"]
+
         if not orders:
-            await interaction.response.send_message("❌ ไม่มีออเดอร์", ephemeral=True)
+            await interaction.response.send_message("❌ ไม่มีออเดอร์ค้าง", ephemeral=True)
             return
 
-        # 📦 แสดงสูงสุด 10 ออเดอร์
-        msg = "📋 ORDER LIST\n\n"
+        msg = "📋 ORDER (ยังไม่เสร็จ)\n\n"
 
+        # 📦 แสดงสูงสุด 10 ออเดอร์
         for order in orders[:10]:
-            order_id, user, item, status = order
-            msg += f"🆔 {order_id} | 👤 {user} | 📦 {item} | 🔄 {status}\n"
+            try:
+                order_id, user, item, amount, roblox_user, status = order
+            except:
+                # fallback ของเก่า
+                order_id, user, item, status = order
+                amount = 1
+                roblox_user = None
+
+            line = f"🆔 {order_id} | 👤 {user} | 📦 {item} x{amount} | 🔄 {status}"
+
+            if roblox_user:
+                line += f" | 🎮 {roblox_user}"
+
+            msg += line + "\n"
 
         await interaction.response.send_message(msg, ephemeral=True)
 
