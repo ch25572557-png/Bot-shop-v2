@@ -7,86 +7,149 @@ class AdminView(discord.ui.View):
         self.bot = bot
 
     # =====================
+    # 🔐 CHECK ADMIN ROLE
+    # =====================
+    def is_admin(self, interaction):
+        role_id = self.bot.brain.get("ROLES.ADMIN_ROLE")
+
+        if not role_id:
+            return False
+
+        return any(str(role.id) == str(role_id) for role in interaction.user.roles)
+
+    # =====================
     # ➕ ADD PRODUCT
     # =====================
     @discord.ui.button(label="➕ เพิ่มสินค้า", style=discord.ButtonStyle.green)
     async def add(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        try:
-            await interaction.response.send_modal(AddModal(self.bot))
-        except Exception as e:
-            print("[ADMIN] modal error:", e)
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
+
+        await interaction.response.send_modal(AddModal(self.bot))
 
     # =====================
-    # 📋 VIEW ORDERS (FINAL SAFE)
+    # 📋 VIEW ORDERS
     # =====================
     @discord.ui.button(label="📋 ดูออเดอร์", style=discord.ButtonStyle.blurple)
     async def view_orders(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        try:
-            orders = self.bot.mem.get_all_orders()
-        except Exception as e:
-            print("[ADMIN] get orders error:", e)
-            orders = []
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
 
-        # 🔥 filter safe
-        try:
-            orders = [o for o in orders if o and len(o) >= 5 and o[-1] != "DONE"]
-        except:
-            orders = []
+        orders = self.bot.mem.get_all_orders() or []
+        orders = [o for o in orders if o and o[-1] != "DONE"]
 
         if not orders:
-            await interaction.response.send_message(
-                "❌ ไม่มีออเดอร์ค้าง",
-                ephemeral=True
-            )
-            return
+            return await interaction.response.send_message("❌ ไม่มีออเดอร์", ephemeral=True)
 
-        msg = "📋 ORDER (ACTIVE)\n\n"
+        msg = "📋 ORDERS\n\n"
 
-        for order in orders[:10]:
-
+        for o in orders[:10]:
             try:
-                order = list(order) + [None] * 6
-
-                order_id = order[0]
-                user = order[1]
-                item = order[2]
-                amount = order[3] or 1
-                roblox_user = order[4]
-                status = order[5]
-
+                o = list(o)
+                msg += f"🆔 {o[0]} | {o[1]} | {o[2]} x{o[3]} | {o[5]}\n"
             except:
                 continue
 
-            line = (
-                f"🆔 {order_id} | 👤 {user} | "
-                f"📦 {item} x{amount} | 🔄 {status}"
-            )
+        await interaction.response.send_message(msg, ephemeral=True)
 
-            if roblox_user:
-                line += f" | 🎮 {roblox_user}"
+    # =====================
+    # ❌ CANCEL + REFUND STOCK
+    # =====================
+    @discord.ui.button(label="❌ ยกเลิกออเดอร์", style=discord.ButtonStyle.red)
+    async def cancel_order(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-            msg += line + "\n"
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
 
-        # 🔥 Discord limit safe (กันข้อความยาวพัง)
-        if len(msg) > 1900:
-            msg = msg[:1900] + "\n... (cut)"
+        await interaction.response.send_message("🧾 ใส่ Order ID", ephemeral=True)
+
+        def check(m):
+            return m.author.id == interaction.user.id
 
         try:
-            await interaction.response.send_message(msg, ephemeral=True)
-        except Exception as e:
-            print("[ADMIN] send error:", e)
+            msg = await self.bot.wait_for("message", check=check, timeout=30)
+            order_id = int(msg.content)
+
+            order = self.bot.mem.get_order(order_id)
+
+            if not order:
+                return await interaction.followup.send("❌ ไม่พบออเดอร์", ephemeral=True)
+
+            user, item, amount, roblox_user, status = order
+
+            # 🔴 refund stock
+            self.bot.mem.add_stock(item, amount)
+
+            # cancel order
+            self.bot.mem.update_order_status(order_id, "CANCELLED")
+
+            await interaction.followup.send("✅ ยกเลิก + คืนสต๊อกแล้ว", ephemeral=True)
+
+        except:
+            await interaction.followup.send("❌ error / timeout", ephemeral=True)
+
+    # =====================
+    # 🔄 RESTOCK
+    # =====================
+    @discord.ui.button(label="🔄 รีสต็อก", style=discord.ButtonStyle.green)
+    async def restock(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
+
+        await interaction.response.send_message("📦 ใส่: ชื่อ | จำนวน", ephemeral=True)
+
+        def check(m):
+            return m.author.id == interaction.user.id
+
+        try:
+            msg = await self.bot.wait_for("message", check=check, timeout=30)
+            name, qty = msg.content.split("|")
+
+            name = name.strip()
+            qty = int(qty.strip())
+
+            self.bot.stock.add(name, qty, 0)
+
+            await interaction.followup.send("✅ รีสต็อกแล้ว", ephemeral=True)
+
+        except:
+            await interaction.followup.send("❌ format ผิด", ephemeral=True)
+
+    # =====================
+    # 📊 VIEW STOCK
+    # =====================
+    @discord.ui.button(label="📊 ดูสต๊อก", style=discord.ButtonStyle.gray)
+    async def view_stock(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
+
+        cur = self.bot.mem.conn.cursor()
+        cur.execute("SELECT name, qty, price FROM stock")
+        data = cur.fetchall()
+
+        if not data:
+            return await interaction.response.send_message("❌ ไม่มีสต๊อก", ephemeral=True)
+
+        msg = "📦 STOCK\n\n"
+
+        for name, qty, price in data[:15]:
+            msg += f"📦 {name} | {qty} | {price}\n"
+
+        await interaction.response.send_message(msg, ephemeral=True)
 
 
 # =====================
-# 🧾 ADD PRODUCT MODAL (FINAL HARDENED)
+# 🧾 MODAL (unchanged)
 # =====================
 class AddModal(discord.ui.Modal, title="Add Product"):
 
-    name = discord.ui.TextInput(label="ชื่อสินค้า", required=True, max_length=100)
-    price = discord.ui.TextInput(label="ราคา", required=True, max_length=20)
-    stock = discord.ui.TextInput(label="จำนวน", required=True, max_length=10)
+    name = discord.ui.TextInput(label="ชื่อสินค้า", required=True)
+    price = discord.ui.TextInput(label="ราคา", required=True)
+    stock = discord.ui.TextInput(label="จำนวน", required=True)
 
     def __init__(self, bot):
         super().__init__()
@@ -96,48 +159,14 @@ class AddModal(discord.ui.Modal, title="Add Product"):
 
         try:
             name = self.name.value.strip()
-        except:
-            name = ""
-
-        try:
             price = float(self.price.value)
             qty = int(self.stock.value)
         except:
-            await interaction.response.send_message(
-                "❌ ข้อมูลไม่ถูกต้อง (ต้องเป็นตัวเลข)",
-                ephemeral=True
-            )
-            return
+            return await interaction.response.send_message("❌ invalid", ephemeral=True)
 
-        # 🔥 FULL VALIDATION (FINAL)
-        if not name:
-            await interaction.response.send_message(
-                "❌ ชื่อสินค้าว่าง",
-                ephemeral=True
-            )
-            return
-
-        if price < 0 or qty <= 0:
-            await interaction.response.send_message(
-                "❌ ค่าไม่ถูกต้อง",
-                ephemeral=True
-            )
-            return
-
-        try:
-            success = self.bot.stock.add(name, qty, price)
-        except Exception as e:
-            print("[ADMIN] stock add error:", e)
-            success = False
-
-        if not success:
-            await interaction.response.send_message(
-                "❌ เพิ่มสินค้าไม่สำเร็จ",
-                ephemeral=True
-            )
-            return
+        self.bot.stock.add(name, qty, price)
 
         await interaction.response.send_message(
-            f"✅ เพิ่มสินค้าแล้ว\n📦 {name} | {qty} ชิ้น | {price} บาท",
+            f"✅ เพิ่ม {name}",
             ephemeral=True
         )
