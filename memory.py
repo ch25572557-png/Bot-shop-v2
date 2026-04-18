@@ -61,6 +61,12 @@ class Memory:
         )
         return self.cur.fetchone()
 
+    def get_all_orders(self):
+        self.cur.execute(
+            "SELECT id, user, item, status FROM orders"
+        )
+        return self.cur.fetchall()
+
     def update_order_status(self, order_id, status):
         self.cur.execute(
             "UPDATE orders SET status=? WHERE id=?",
@@ -83,5 +89,58 @@ class Memory:
         self.cur.execute(
             "SELECT channel_id FROM tickets WHERE order_id=?",
             (order_id,)
+        )
+        return self.cur.fetchone()
+
+    def get_order_by_channel(self, channel_id):
+        self.cur.execute(
+            "SELECT order_id FROM tickets WHERE channel_id=?",
+            (channel_id,)
+        )
+        result = self.cur.fetchone()
+        return result[0] if result else None
+
+    # =====================
+    # 📦 STOCK SYSTEM
+    # =====================
+
+    def minus_stock(self, item, amount=1):
+        self.cur.execute(
+            "SELECT qty FROM stock WHERE name=?",
+            (item,)
+        )
+        result = self.cur.fetchone()
+
+        if not result:
+            return False
+
+        qty = result[0]
+
+        if qty < amount:
+            return False
+
+        self.cur.execute(
+            "UPDATE stock SET qty = qty - ? WHERE name=?",
+            (amount, item)
+        )
+        self.conn.commit()
+        return True
+
+    # =====================
+    # 💰 POINT SYSTEM
+    # =====================
+
+    def add_points(self, user, amount):
+        self.cur.execute(
+            "INSERT INTO points(user, point) VALUES(?, ?) "
+            "ON CONFLICT(user) DO UPDATE SET point = point + ?",
+            (user, amount, amount)
+        )
+        self.conn.commit()
+
+    def get_points(self, user):
+        self.cur.execute(
+            "SELECT point FROM points WHERE user=?",
+            (user,)
         )
         return self.cur.fetchone()
