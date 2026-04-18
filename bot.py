@@ -15,6 +15,9 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
+# =====================
+# 🔥 INTENTS
+# =====================
 intents = discord.Intents.all()
 intents.message_content = True
 
@@ -46,7 +49,7 @@ bot.order = OrderSystem(
 )
 
 # =====================
-# 🚀 READY (FIXED)
+# 🚀 READY (SAFE FIX)
 # =====================
 @bot.event
 async def on_ready():
@@ -58,12 +61,13 @@ async def on_ready():
     except Exception as e:
         print("[VIEW REGISTER ERROR]", e)
 
-    # 🔥 FIX: START FARM WORKER AFTER LOOP READY
+    # 🔥 SAFE START FARM WORKER (FIXED)
     if not hasattr(bot, "farm_started"):
         bot.farm_started = True
-        bot.loop.create_task(bot.order.farm_worker())
-        print("🧠 FARM WORKER STARTED")
 
+        asyncio.create_task(bot.order.farm_worker())
+
+        print("🧠 FARM WORKER STARTED")
 
 # =====================
 # 💬 COMMANDS
@@ -72,14 +76,12 @@ async def on_ready():
 async def shop(ctx):
     await ctx.send("🛒 SHOP ONLINE", view=ShopView(bot))
 
-
 @bot.command()
 async def admin(ctx):
     await ctx.send("🛠 ADMIN PANEL", view=AdminView(bot))
 
-
 # =====================
-# 🚀 SAFE RUN
+# 🚀 RUN BOT
 # =====================
 token = os.getenv("DISCORD_TOKEN")
 
