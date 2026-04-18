@@ -7,34 +7,42 @@ class TicketSystem:
         self.bot = bot
 
     # =====================
-    # 🎫 CREATE TICKET
+    # 🎫 CREATE TICKET (SAFE + FINAL)
     # =====================
     async def create(self, guild, user, order_id):
 
         # =====================
-        # 📁 CATEGORY SAFE
+        # 📁 CATEGORY SAFE RESOLVE
         # =====================
         category = None
 
         try:
             category_id = self.brain.get("CHANNELS.TICKET_CATEGORY")
+
             if category_id:
-                category = guild.get_channel(int(category_id))
+                category_id = int(category_id)
 
-            if not category:
-                category = await guild.fetch_channel(int(category_id))
+                category = guild.get_channel(category_id)
 
-        except:
+                if category is None:
+                    category = await guild.fetch_channel(category_id)
+
+        except Exception as e:
+            print("[TICKET] category error:", e)
             category = None
 
         # =====================
-        # 🔒 PERMISSIONS
+        # 🔒 PERMISSIONS (SAFE)
         # =====================
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            user: discord.PermissionOverwrite(view_channel=True),
-            guild.me: discord.PermissionOverwrite(view_channel=True)
-        }
+        try:
+            overwrites = {
+                guild.default_role: discord.PermissionOverwrite(view_channel=False),
+                user: discord.PermissionOverwrite(view_channel=True),
+                guild.me: discord.PermissionOverwrite(view_channel=True)
+            }
+        except Exception as e:
+            print("[TICKET] permission error:", e)
+            return None
 
         # =====================
         # 🧱 CREATE CHANNEL
@@ -46,11 +54,11 @@ class TicketSystem:
                 overwrites=overwrites
             )
         except Exception as e:
-            print("[TICKET] create error:", e)
+            print("[TICKET] create channel error:", e)
             return None
 
         # =====================
-        # 💾 SAVE TICKET LINK
+        # 💾 SAVE TICKET
         # =====================
         try:
             self.bot.mem.save_ticket(order_id, str(channel.id))
@@ -58,25 +66,24 @@ class TicketSystem:
             print("[TICKET] save error:", e)
 
         # =====================
-        # 📦 ORDER DATA
+        # 📦 ORDER DATA SAFE UNPACK
         # =====================
-        data = self.bot.mem.get_order(order_id)
-
         item = "Unknown"
         amount = 1
         roblox_user = None
 
-        if data:
-            try:
-                user_db, item, amount, roblox_user, status = data
-            except:
-                try:
-                    user_db, item, status = data
-                except:
-                    pass
+        try:
+            data = self.bot.mem.get_order(order_id)
+
+            if data:
+                data = list(data) + [None] * 5
+                user_db, item, amount, roblox_user, status = data[:5]
+
+        except Exception as e:
+            print("[TICKET] order load error:", e)
 
         # =====================
-        # 📢 MESSAGE + STATUS VIEW
+        # 📢 MESSAGE (SAFE BUILD)
         # =====================
         try:
             msg = (
