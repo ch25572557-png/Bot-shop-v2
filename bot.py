@@ -14,11 +14,14 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
+# ⚠️ ถ้ามีไฟล์ view เพิ่ม ให้ import เพิ่มตรงนี้
+# from ui import CancelView
+# from ticket_view import TicketView
+
 # =====================
-# 🔥 INTENTS (FIXED CLEAN)
+# 🔥 INTENTS
 # =====================
 intents = discord.Intents.all()
-
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # =====================
@@ -35,9 +38,6 @@ bot.ticket = TicketSystem(bot.brain, bot)
 bot.notify = NotifySystem(bot.brain, bot)
 bot.backup = BackupSystem(bot.brain, bot)
 
-# =====================
-# 🛒 ORDER SYSTEM
-# =====================
 bot.order = OrderSystem(
     bot.mem,
     bot.ticket,
@@ -52,41 +52,60 @@ bot.order = OrderSystem(
 # =====================
 @bot.event
 async def on_ready():
-
     print(f"🟢 LOGGED IN AS {bot.user}")
 
+    # กันรันซ้ำ
+    if getattr(bot, "ready_done", False):
+        return
+    bot.ready_done = True
+
     # =====================
-    # 🎛 REGISTER VIEWS
+    # 🎛 REGISTER VIEWS (สำคัญมาก)
     # =====================
     try:
         bot.add_view(ShopView(bot))
         bot.add_view(AdminView(bot))
+
+        # ⚠️ เพิ่มถ้ามี
+        # bot.add_view(CancelView())
+        # bot.add_view(TicketView())
+
+        print("✅ VIEWS REGISTERED")
     except Exception as e:
         print("[VIEW REGISTER ERROR]", e)
 
     # =====================
-    # 🧠 FARM START (FIXED - NO AWAIT)
+    # 📦 START STOCK SYSTEM
     # =====================
-    if not hasattr(bot, "farm_started"):
+    try:
+        if hasattr(bot.stock, "start"):
+            bot.stock.start()
+            print("📦 STOCK SYSTEM STARTED")
+    except Exception as e:
+        print("[STOCK START ERROR]", e)
 
-        bot.farm_started = True
-
-        try:
-            bot.order.start()  # ✅ FIX: no await
-            print("🧠 FARM WORKER STARTED")
-        except Exception as e:
-            print("[FARM START ERROR]", e)
+    # =====================
+    # 🧠 START ORDER SYSTEM
+    # =====================
+    try:
+        if hasattr(bot.order, "start"):
+            bot.order.start()
+            print("🛒 ORDER SYSTEM STARTED")
+    except Exception as e:
+        print("[ORDER START ERROR]", e)
 
 # =====================
 # 💬 COMMANDS
 # =====================
 @bot.command()
 async def shop(ctx):
-    await ctx.send("🛒 SHOP ONLINE", view=ShopView(bot))
+    embed = discord.Embed(title="🛒 SHOP ONLINE", color=0x00ffcc)
+    await ctx.send(embed=embed, view=ShopView(bot))
 
 @bot.command()
 async def admin(ctx):
-    await ctx.send("🛠 ADMIN PANEL", view=AdminView(bot))
+    embed = discord.Embed(title="🛠 ADMIN PANEL", color=0xffcc00)
+    await ctx.send(embed=embed, view=AdminView(bot))
 
 # =====================
 # 🚀 RUN BOT
