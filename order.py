@@ -9,21 +9,16 @@ class OrderSystem:
         self.backup = backup
         self.brain = brain
 
-        # 🟡 cooldown storage (stock alert)
         self.last_alert = {}
-
-        # 🔒 lock กัน stock race condition (สำคัญมาก)
         self._lock = asyncio.Lock()
 
     # =====================
-    # 🛒 CREATE ORDER
+    # 🛒 CREATE ORDER (SAFE FLOW)
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
         try:
-            amount = int(amount)
-            if amount <= 0:
-                amount = 1
+            amount = max(int(amount), 1)
         except:
             amount = 1
 
@@ -35,25 +30,22 @@ class OrderSystem:
             "WAIT"
         )
 
-        # 🔒 FIX: None safe
-        if order_id is None:
+        if not order_id:
             return False
 
-        # 📢 notify admin
+        # 🔔 ADMIN NOTIFY (must go admin order channel)
         try:
             await self.notify.admin(user, item, order_id)
         except Exception as e:
             print("[ORDER] notify error:", e)
 
-        # 💾 backup
+        # 💾 BACKUP
         try:
-            await self.backup.log(
-                f"ORDER #{order_id} | {user} | {item} x{amount}"
-            )
+            await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
         except Exception as e:
             print("[ORDER] backup error:", e)
 
-        # 🎫 ticket
+        # 🎫 TICKET CREATE
         try:
             await self.ticket.create(guild, user, order_id)
         except Exception as e:
@@ -62,47 +54,46 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # 🔥 STOCK ALERT SYSTEM (FIXED)
+    # 🔥 STOCK ALERT (ANTI-SPAM + SAFE)
     # =====================
     async def stock_alert(self, item, guild):
 
+        LOW = self.brain.get("SETTINGS.LOW_STOCK", 5)
+        CD = self.brain.get("SETTINGS.COOLDOWN", 3)
+
         try:
-            LOW_STOCK = int(self.brain.get("SETTINGS.LOW_STOCK") or 5)
-            COOLDOWN = int(self.brain.get("SETTINGS.COOLDOWN") or 3)
+            LOW = int(LOW)
+            CD = int(CD)
         except:
-            LOW_STOCK = 5
-            COOLDOWN = 3
+            LOW = 5
+            CD = 3
 
         qty = self.mem.get_stock(item)
 
-        if qty > LOW_STOCK:
+        if qty > LOW:
             return
 
+        key = f"{guild.id}:{item}"
         now = time.time()
 
-        # 🔥 FIX: guild-level key กัน spam ข้าม server
-        key = f"{guild.id}:{item}"
-
         if key in self.last_alert:
-            if now - self.last_alert[key] < COOLDOWN * 60:
+            if now - self.last_alert[key] < CD * 60:
                 return
 
         self.last_alert[key] = now
 
         try:
             admin_id = self.brain.get("CHANNELS.ADMIN")
-            admin_ch = guild.get_channel(int(admin_id))
+            ch = guild.get_channel(int(admin_id))
 
-            if admin_ch:
-                await admin_ch.send(
-                    f"⚠️ STOCK ALERT\n📦 {item}\n📉 เหลือ {qty}"
-                )
+            if ch:
+                await ch.send(f"⚠️ STOCK ALERT\n📦 {item}\n📉 เหลือ {qty}")
 
         except Exception as e:
             print("[ORDER] stock alert error:", e)
 
     # =====================
-    # ✅ COMPLETE ORDER (FIXED CORE FLOW)
+    # ✅ COMPLETE ORDER (FINAL SAFE FLOW)
     # =====================
     async def complete(self, channel):
 
@@ -114,29 +105,37 @@ class OrderSystem:
         if not data:
             return False
 
-        # 🔥 FIX: safe unpack (กัน DB พัง)
+        # 🔒 SAFE UNPACK
         try:
-            data = list(data) + [None] * (5 - len(data))
+            data = list(data) + [None] * 5
             user, item, amount, roblox_user, status = data[:5]
         except:
             return False
 
-        # 🔒 กัน double complete
         if status == "DONE":
             return False
 
         # =====================
-        # 📦 STOCK (LOCKED → FIX RACE CONDITION)
+        # 📦 STOCK LOCK (FIX RACE CONDITION)
         # =====================
         async with self._lock:
             success = self.mem.minus_stock(item, amount)
 
+        # 🟡 FARM MODE LOGIC (IMPORTANT FIX)
         if not success:
-            try:
-                await channel.send("❌ สต็อกไม่พอ หรือสินค้าไม่มี")
-            except:
-                pass
-            return False
+            allow_farm = self.brain.get("SETTINGS.ALLOW_FARM_IF_NO_STOCK", False)
+
+            if allow_farm:
+                try:
+                    await channel.send("⚠️ ไม่มีสต๊อก → เข้าสู่โหมดฟาร์ม")
+                except:
+                    pass
+            else:
+                try:
+                    await channel.send("❌ สต๊อกไม่พอ หรือสินค้าไม่มี")
+                except:
+                    pass
+                return False
 
         # =====================
         # 🔄 UPDATE STATUS
@@ -146,8 +145,10 @@ class OrderSystem:
         # =====================
         # 💰 POINTS
         # =====================
+        point = self.brain.get("SETTINGS.POINT_PER_ORDER", 0)
+
         try:
-            point = int(self.brain.get("SETTINGS.POINT_PER_ORDER"))
+            point = int(point)
         except:
             point = 0
 
@@ -168,9 +169,7 @@ class OrderSystem:
         # 💾 BACKUP
         # =====================
         try:
-            await self.backup.log(
-                f"COMPLETE #{order_id} | {user} | {item} x{amount}"
-            )
+            await self.backup.log(f"COMPLETE #{order_id} | {user} | {item} x{amount}")
         except Exception as e:
             print("[ORDER] backup error:", e)
 
@@ -191,13 +190,13 @@ class OrderSystem:
             print("[ORDER] message error:", e)
 
         # =====================
-        # ⏱ CLOSE
+        # ⏱ CLOSE CHANNEL
         # =====================
         await asyncio.sleep(10)
 
         try:
             await channel.delete()
         except Exception as e:
-            print("[ORDER] delete channel error:", e)
+            print("[ORDER] delete error:", e)
 
         return True
