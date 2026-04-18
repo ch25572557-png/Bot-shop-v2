@@ -15,9 +15,11 @@ from shop import ShopView
 from admin import AdminView
 
 # =====================
-# 🔥 INTENTS
+# 🔥 INTENTS (FIX: message_content สำคัญมาก)
 # =====================
 intents = discord.Intents.all()
+intents.message_content = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # =====================
@@ -31,9 +33,7 @@ bot.mem = Memory()
 # =====================
 bot.stock = StockSystem(bot.mem)
 
-# ✔ FIX: TicketSystem ต้องรับ (brain, bot)
 bot.ticket = TicketSystem(bot.brain, bot)
-
 bot.notify = NotifySystem(bot.brain, bot)
 bot.backup = BackupSystem(bot.brain, bot)
 
@@ -53,10 +53,9 @@ bot.order = OrderSystem(
 # =====================
 @bot.event
 async def on_ready():
+    print(f"🟢 LOGGED IN AS {bot.user}")
 
-    print("🟢 FULL SHOP SYSTEM ONLINE")
-
-    # 🔥 persistent UI (สำคัญมาก)
+    # 🔥 persistent UI
     try:
         bot.add_view(ShopView(bot))
         bot.add_view(AdminView(bot))
