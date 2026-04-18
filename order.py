@@ -27,7 +27,7 @@ class OrderSystem:
         asyncio.create_task(self.farm_worker())
 
     # =====================
-    # 📢 ADMIN SEND (FIX 100%)
+    # 📢 ADMIN SEND
     # =====================
     async def send_admin(self, msg):
         try:
@@ -39,14 +39,9 @@ class OrderSystem:
             if not ch_id:
                 return
 
-            channel = None
-
-            try:
-                channel = self.bot.get_channel(int(ch_id))
-                if channel is None:
-                    channel = await self.bot.fetch_channel(int(ch_id))
-            except:
-                return
+            channel = self.bot.get_channel(int(ch_id))
+            if channel is None:
+                channel = await self.bot.fetch_channel(int(ch_id))
 
             if channel:
                 await channel.send(msg)
@@ -75,7 +70,6 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # 🔥 SEND TO ADMIN (FIXED)
         await self.send_admin(
             f"📦 NEW ORDER #{order_id}\n"
             f"👤 {user}\n"
@@ -100,6 +94,87 @@ class OrderSystem:
             pass
 
         return order_id
+
+    # =====================
+    # ✅ COMPLETE ORDER (เพิ่มให้ครบ)
+    # =====================
+    async def complete(self, channel):
+
+        order_id = self.mem.get_order_by_channel(str(channel.id))
+        if not order_id:
+            return False
+
+        data = self.mem.get_order(order_id)
+        if not data:
+            return False
+
+        user, item, amount, roblox_user, status = data
+
+        if status == "DONE":
+            return False
+
+        # =====================
+        # 🔒 STOCK LOCK
+        # =====================
+        async with self._lock:
+            success = self.mem.minus_stock(item, amount)
+
+        allow_farm = bool(self.brain.get("SETTINGS.ALLOW_FARM_IF_NO_STOCK", False))
+
+        if not success:
+
+            if allow_farm:
+                await channel.send("⚠️ ไม่มีสต๊อก → เข้าคิวฟาร์ม")
+
+                await self.farm_queue.put({
+                    "item": item,
+                    "amount": amount,
+                    "order_id": order_id
+                })
+            else:
+                await channel.send("❌ สต๊อกไม่พอ")
+                return False
+
+        # =====================
+        # 💾 STATUS
+        # =====================
+        self.mem.update_order_status(order_id, "DONE")
+
+        # =====================
+        # 💰 POINTS
+        # =====================
+        point = int(self.brain.get("SETTINGS.POINT_PER_ORDER") or 0)
+
+        try:
+            self.mem.add_points(user, point)
+        except:
+            pass
+
+        # =====================
+        # 📢 ADMIN UPDATE
+        # =====================
+        try:
+            await self.send_admin(
+                f"✅ COMPLETE #{order_id}\n"
+                f"📦 {item} x{amount}"
+            )
+        except:
+            pass
+
+        # =====================
+        # 📦 MESSAGE
+        # =====================
+        try:
+            msg = f"✅ DONE\n📦 {item} x{amount}\n💰 +{point} points"
+
+            if roblox_user:
+                msg += f"\n🎮 {roblox_user}"
+
+            await channel.send(msg)
+        except:
+            pass
+
+        return True
 
     # =====================
     # 🧠 FARM WORKER
