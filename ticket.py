@@ -7,12 +7,30 @@ class TicketSystem:
         self.bot = bot
 
     # =====================
-    # 🎫 CREATE TICKET (FINAL SAFE VERSION)
+    # 📢 SEND TO ADMIN CHANNEL (NEW)
+    # =====================
+    async def send_to_admin(self, guild, message: str):
+        try:
+            ch_id = self.brain.get("ORDER_NOTIFY")  # 👈 ใช้ config ที่คุณตั้งไว้
+
+            if not ch_id:
+                return
+
+            channel = guild.get_channel(int(ch_id))
+
+            if channel:
+                await channel.send(message)
+
+        except Exception as e:
+            print("[ADMIN NOTIFY ERROR]", e)
+
+    # =====================
+    # 🎫 CREATE TICKET
     # =====================
     async def create(self, guild, user, order_id):
 
         # =====================
-        # 📁 CATEGORY RESOLVE (STRICT TYPE SAFE)
+        # 📁 CATEGORY RESOLVE
         # =====================
         category = None
 
@@ -24,7 +42,6 @@ class TicketSystem:
 
                 ch = guild.get_channel(category_id)
 
-                # 🔥 MUST check type
                 if isinstance(ch, discord.CategoryChannel):
                     category = ch
                 else:
@@ -35,10 +52,9 @@ class TicketSystem:
 
         except Exception as e:
             print("[TICKET] category error:", e)
-            category = None
 
         # =====================
-        # 🔒 PERMISSIONS SAFE
+        # 🔒 PERMISSIONS
         # =====================
         try:
             overwrites = {
@@ -72,7 +88,7 @@ class TicketSystem:
             print("[TICKET] save error:", e)
 
         # =====================
-        # 📦 ORDER DATA SAFE UNPACK
+        # 📦 ORDER DATA
         # =====================
         item = "Unknown"
         amount = 1
@@ -89,7 +105,20 @@ class TicketSystem:
             print("[TICKET] order load error:", e)
 
         # =====================
-        # 📢 MESSAGE + STATUS VIEW
+        # 📢 SEND TO ADMIN (🔥 FIX สำคัญ)
+        # =====================
+        try:
+            await self.send_to_admin(
+                guild,
+                f"🆕 ORDER #{order_id}\n"
+                f"👤 {user}\n"
+                f"📦 {item} x{amount}"
+            )
+        except:
+            pass
+
+        # =====================
+        # 📢 TICKET MESSAGE
         # =====================
         try:
             msg = (
