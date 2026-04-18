@@ -1,4 +1,5 @@
 import discord
+import asyncio
 
 class StatusView(discord.ui.View):
 
@@ -6,21 +7,31 @@ class StatusView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
         self.order_id = order_id
-        self.locked = False
+
+        # 🔥 กันกดซ้อนแบบปลอดภัยจริง
+        self._lock = asyncio.Lock()
 
     # =====================
-    # 🔐 ADMIN CHECK (ROBUST)
+    # 🔐 ADMIN CHECK (ROBUST FIXED)
     # =====================
     def is_admin(self, interaction: discord.Interaction):
 
-        role_id = self.bot.brain.get("ROLES.ADMIN_ROLE")
+        try:
+            role_id = self.bot.brain.get("ROLES.ADMIN_ROLE")
 
-        if role_id:
-            role = interaction.guild.get_role(int(role_id))
-            if role in interaction.user.roles:
-                return True
+            # fallback: ถ้าไม่มี role ใช้ permission แทน
+            if not role_id:
+                return interaction.user.guild_permissions.administrator
 
-        return interaction.user.guild_permissions.administrator
+            role_id = int(role_id)
+
+            return (
+                interaction.user.guild_permissions.administrator
+                or any(r.id == role_id for r in interaction.user.roles)
+            )
+
+        except:
+            return interaction.user.guild_permissions.administrator
 
     # =====================
     # ⛔ GLOBAL BLOCK
@@ -57,7 +68,7 @@ class StatusView(discord.ui.View):
     # =====================
     # 🪏 FARM
     # =====================
-    @discord.ui.button(label="🪏 ฟาร์ม", style=discord.ButtonStyle.green)
+    @discord.ui.button(label="🪏 กำลังฟาร์ม", style=discord.ButtonStyle.green)
     async def farming(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         self.bot.mem.update_order_status(self.order_id, "FARMING")
@@ -73,30 +84,29 @@ class StatusView(discord.ui.View):
         await interaction.response.send_message("📦 WAIT_CUSTOMER", ephemeral=True)
 
     # =====================
-    # ✅ DONE (SAFE FINAL)
+    # ✅ DONE (FULL SAFE FIX)
     # =====================
     @discord.ui.button(label="✅ ส่งของเสร็จแล้ว", style=discord.ButtonStyle.red)
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        # 🔐 admin check (double safety)
         if not self.is_admin(interaction):
-            await interaction.response.send_message("❌ admin only", ephemeral=True)
-            return
+            return await interaction.response.send_message(
+                "❌ admin only",
+                ephemeral=True
+            )
 
-        # 🧠 กันกดซ้ำ
-        if self.locked:
-            await interaction.response.send_message("❌ กำลังดำเนินการอยู่", ephemeral=True)
-            return
+        # 🔥 กันกดซ้อนระดับ production
+        async with self._lock:
 
-        self.locked = True
+            try:
+                await interaction.response.send_message(
+                    "🔄 กำลังจบออเดอร์...",
+                    ephemeral=True
+                )
+            except:
+                pass
 
-        try:
-            await interaction.response.send_message("🔄 กำลังจบออเดอร์...", ephemeral=True)
-
-            await self.bot.order.complete(interaction.channel)
-
-        except Exception as e:
-            print("[STATUS] complete error:", e)
-
-        finally:
-            self.locked = False
+            try:
+                await self.bot.order.complete(interaction.channel)
+            except Exception as e:
+                print("[STATUS] complete error:", e)
