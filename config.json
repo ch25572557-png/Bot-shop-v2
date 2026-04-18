@@ -1,32 +1,37 @@
 {
   "CHANNELS": {
-    "ORDER_NOTIFY": "ใส่ไอดีห้องแจ้งออเดอร์แอดมิน",
-    "LOG_CHANNEL": "ใส่ไอดีห้อง Logs",
-    "TICKET_CATEGORY": "ใส่ไอดีหมวดหมู่ Ticket",
-    "BACKUP_CHANNEL": "ใส่ไอดีห้อง Backup",
+    "ORDER_NOTIFY": "1494409750866301209",
+    "LOG_CHANNEL": "1494258803422662856",
+    "TICKET_CATEGORY": "1494030086779699352",
+    "BACKUP_CHANNEL": "1494736317844820029",
 
-    "STOCK_ALERT_CHANNEL": "ใส่ไอดีห้องแจ้งของใกล้หมด",
-    "STOCK_PANEL_CHANNEL": "ใส่ไอดีห้องจัดการสต๊อก",
-    "DASHBOARD_CHANNEL": "ใส่ไอดีห้อง dashboard (embed สรุป)"
+    "STOCK_ALERT_CHANNEL": "1494560141331398747",
+    "STOCK_PANEL_CHANNEL": "1494602707380473896",
+
+    "DASHBOARD_CHANNEL": "1494667956783943750"
   },
 
   "ROLES": {
-    "ADMIN_ROLE": "ใส่ไอดียศแอดมิน"
+    "ADMIN_ROLE": "1484797686648537205"
   },
 
   "SETTINGS": {
     "POINT_PER_ORDER": 10,
+
     "LOW_STOCK": 100,
 
     "ORDER_COOLDOWN_MIN": 3,
 
     "AUTO_ALERT": true,
+
     "AUTO_CLOSE_TICKET": true,
 
     "STOCK_ALERT_COOLDOWN_SEC": 60,
 
     "ALLOW_FARM_IF_NO_STOCK": true,
 
-    "AUTO_FARM_QUEUE": true
+    "AUTO_FARM_QUEUE": true,
+
+    "DASHBOARD_AUTO_UPDATE_SEC": 10
   }
 }
