@@ -7,16 +7,23 @@ class TicketSystem:
         self.bot = bot
 
     # =====================
-    # 📢 SEND TO ADMIN CHANNEL (NEW)
+    # 📢 SEND TO ADMIN CHANNEL (FIX 100%)
     # =====================
     async def send_to_admin(self, guild, message: str):
         try:
-            ch_id = self.brain.get("ORDER_NOTIFY")  # 👈 ใช้ config ที่คุณตั้งไว้
+            ch_id = (
+                self.brain.get("ORDER_NOTIFY")
+                or self.brain.get("CHANNELS.ORDER_NOTIFY")
+                or self.brain.get("CHANNELS.ORDER_NOTIFY_ID")
+            )
 
             if not ch_id:
                 return
 
-            channel = guild.get_channel(int(ch_id))
+            channel = self.bot.get_channel(int(ch_id))
+
+            if channel is None:
+                channel = await self.bot.fetch_channel(int(ch_id))
 
             if channel:
                 await channel.send(message)
@@ -105,7 +112,7 @@ class TicketSystem:
             print("[TICKET] order load error:", e)
 
         # =====================
-        # 📢 SEND TO ADMIN (🔥 FIX สำคัญ)
+        # 📢 SEND TO ADMIN (FIXED)
         # =====================
         try:
             await self.send_to_admin(
@@ -118,7 +125,7 @@ class TicketSystem:
             pass
 
         # =====================
-        # 📢 TICKET MESSAGE
+        # 📢 TICKET MESSAGE (ลูกค้า)
         # =====================
         try:
             msg = (
