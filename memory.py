@@ -5,7 +5,9 @@ class Memory:
         self.conn = sqlite3.connect("shop.db")
         self.cur = self.conn.cursor()
 
-        # 📦 orders
+        # =====================
+        # 📦 ORDERS
+        # =====================
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS orders(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -15,7 +17,13 @@ class Memory:
         )
         """)
 
-        # 📦 stock
+        # 🆕 เพิ่ม column แบบไม่พัง DB เดิม
+        self._safe_add_column("orders", "amount", "INTEGER DEFAULT 1")
+        self._safe_add_column("orders", "roblox_user", "TEXT")
+
+        # =====================
+        # 📦 STOCK
+        # =====================
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS stock(
             name TEXT PRIMARY KEY,
@@ -24,7 +32,9 @@ class Memory:
         )
         """)
 
-        # 💰 points
+        # =====================
+        # 💰 POINTS
+        # =====================
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS points(
             user TEXT PRIMARY KEY,
@@ -32,7 +42,9 @@ class Memory:
         )
         """)
 
-        # 🎫 tickets (ผูกกับ order จริง)
+        # =====================
+        # 🎫 TICKETS
+        # =====================
         self.cur.execute("""
         CREATE TABLE IF NOT EXISTS tickets(
             order_id INTEGER PRIMARY KEY,
@@ -43,27 +55,37 @@ class Memory:
         self.conn.commit()
 
     # =====================
+    # 🛠 SAFE ADD COLUMN
+    # =====================
+    def _safe_add_column(self, table, column, definition):
+        try:
+            self.cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            self.conn.commit()
+        except:
+            pass  # มีอยู่แล้วจะ error → ข้าม
+
+    # =====================
     # 📦 ORDER SYSTEM
     # =====================
 
-    def add_order(self, user, item, status="WAIT"):
+    def add_order(self, user, item, amount=1, roblox_user=None, status="WAIT"):
         self.cur.execute(
-            "INSERT INTO orders(user,item,status) VALUES(?,?,?)",
-            (user, item, status)
+            "INSERT INTO orders(user,item,amount,roblox_user,status) VALUES(?,?,?,?,?)",
+            (user, item, amount, roblox_user, status)
         )
         self.conn.commit()
         return self.cur.lastrowid
 
     def get_order(self, order_id):
         self.cur.execute(
-            "SELECT user, item, status FROM orders WHERE id=?",
+            "SELECT user, item, amount, roblox_user, status FROM orders WHERE id=?",
             (order_id,)
         )
         return self.cur.fetchone()
 
     def get_all_orders(self):
         self.cur.execute(
-            "SELECT id, user, item, status FROM orders"
+            "SELECT id, user, item, amount, roblox_user, status FROM orders"
         )
         return self.cur.fetchall()
 
