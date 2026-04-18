@@ -7,9 +7,17 @@ class OrderSystem:
         self.brain = brain
 
     # =====================
-    # 🛒 CREATE ORDER (รองรับโปร)
+    # 🛒 CREATE ORDER
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
+
+        # 🔒 กัน input พัง
+        try:
+            amount = int(amount)
+            if amount <= 0:
+                amount = 1
+        except:
+            amount = 1
 
         # 🟢 create order
         order_id = self.mem.add_order(
@@ -41,7 +49,7 @@ class OrderSystem:
             pass
 
     # =====================
-    # ✅ COMPLETE ORDER (รองรับโปร)
+    # ✅ COMPLETE ORDER
     # =====================
     async def complete(self, channel):
 
@@ -55,7 +63,7 @@ class OrderSystem:
         if not data:
             return False
 
-        # 🧠 รองรับทั้งของเก่า + ใหม่
+        # 🧠 รองรับโครงใหม่ (และ fallback เผื่อ)
         try:
             user, item, amount, roblox_user, status = data
         except:
@@ -68,12 +76,7 @@ class OrderSystem:
             return False
 
         # =====================
-        # 🔄 UPDATE STATUS
-        # =====================
-        self.mem.update_order_status(order_id, "DONE")
-
-        # =====================
-        # 📦 MINUS STOCK
+        # 📦 MINUS STOCK (ทำก่อน)
         # =====================
         success = self.mem.minus_stock(item, amount)
 
@@ -85,6 +88,11 @@ class OrderSystem:
             return False
 
         # =====================
+        # 🔄 UPDATE STATUS
+        # =====================
+        self.mem.update_order_status(order_id, "DONE")
+
+        # =====================
         # 💰 ADD POINT
         # =====================
         try:
@@ -92,7 +100,10 @@ class OrderSystem:
         except:
             point = 0
 
-        self.mem.add_points(user, point)
+        try:
+            self.mem.add_points(user, point)
+        except:
+            pass
 
         # =====================
         # 💾 BACKUP LOG
