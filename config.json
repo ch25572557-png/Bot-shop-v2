@@ -16,7 +16,7 @@
 
   "SETTINGS": {
     "POINT_PER_ORDER": 10,
-    "LOW_STOCK": 5,
+    "LOW_STOCK": 100,
 
     "ORDER_COOLDOWN_MIN": 3,
 
