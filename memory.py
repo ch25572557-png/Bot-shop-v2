@@ -17,7 +17,7 @@ class Memory:
         )
         """)
 
-        # 🆕 เพิ่ม column แบบไม่พัง DB เดิม
+        # 🆕 เพิ่ม column (ไม่พัง DB เดิม)
         self._safe_add_column("orders", "amount", "INTEGER DEFAULT 1")
         self._safe_add_column("orders", "roblox_user", "TEXT")
 
@@ -62,7 +62,7 @@ class Memory:
             self.cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
             self.conn.commit()
         except:
-            pass  # มีอยู่แล้วจะ error → ข้าม
+            pass
 
     # =====================
     # 📦 ORDER SYSTEM
@@ -147,6 +147,15 @@ class Memory:
         )
         self.conn.commit()
         return True
+
+    # 🆕 เพิ่มฟังก์ชันเช็ค stock (ไม่กระทบของเดิม)
+    def get_stock(self, item):
+        self.cur.execute(
+            "SELECT qty FROM stock WHERE name=?",
+            (item,)
+        )
+        result = self.cur.fetchone()
+        return result[0] if result else 0
 
     # =====================
     # 💰 POINT SYSTEM
