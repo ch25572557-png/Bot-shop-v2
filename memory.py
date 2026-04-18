@@ -3,11 +3,19 @@ import threading
 
 class Memory:
     def __init__(self):
-        # 🟡 thread-safe
-        self.conn = sqlite3.connect("shop.db", check_same_thread=False)
 
-        # 🔒 lock กันชน DB (สำคัญมาก)
+        self.conn = sqlite3.connect(
+            "shop.db",
+            check_same_thread=False
+        )
+
         self.lock = threading.Lock()
+
+        # =====================
+        # ⚙️ ENABLE WAL (FIXED POSITION)
+        # =====================
+        with self.lock:
+            self.conn.execute("PRAGMA journal_mode=WAL")
 
         # =====================
         # 📦 ORDERS
@@ -19,14 +27,11 @@ class Memory:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user TEXT,
                 item TEXT,
+                amount INTEGER DEFAULT 1,
+                roblox_user TEXT,
                 status TEXT
             )
             """)
-
-            cur.execute("PRAGMA journal_mode=WAL")  # 🔥 improve concurrency
-
-        self._safe_add_column("orders", "amount", "INTEGER DEFAULT 1")
-        self._safe_add_column("orders", "roblox_user", "TEXT")
 
         # =====================
         # 📦 STOCK
@@ -68,21 +73,7 @@ class Memory:
         self.conn.commit()
 
     # =====================
-    # 🛠 SAFE ADD COLUMN
-    # =====================
-    def _safe_add_column(self, table, column, definition):
-        try:
-            with self.lock:
-                cur = self.conn.cursor()
-                cur.execute(
-                    f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
-                )
-                self.conn.commit()
-        except:
-            pass
-
-    # =====================
-    # 📦 ORDER SYSTEM
+    # 📦 ORDER
     # =====================
     def add_order(self, user, item, amount=1, roblox_user=None, status="WAIT"):
         try:
@@ -102,31 +93,27 @@ class Memory:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT user, item, amount, roblox_user, status FROM orders WHERE id=?",
+                "SELECT user,item,amount,roblox_user,status FROM orders WHERE id=?",
                 (order_id,)
             )
-            result = cur.fetchone()
-            return result
-        except Exception as e:
-            print("[MEMORY] get_order error:", e)
+            return cur.fetchone()
+        except:
             return None
 
     def get_all_orders(self):
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT id, user, item, amount, roblox_user, status FROM orders"
+                "SELECT id,user,item,amount,roblox_user,status FROM orders"
             )
             return cur.fetchall()
-        except Exception as e:
-            print("[MEMORY] get_all_orders error:", e)
+        except:
             return []
 
     def update_order_status(self, order_id, status):
         try:
             with self.lock:
-                cur = self.conn.cursor()
-                cur.execute(
+                self.conn.execute(
                     "UPDATE orders SET status=? WHERE id=?",
                     (status, order_id)
                 )
@@ -135,19 +122,18 @@ class Memory:
             print("[MEMORY] update_order_status error:", e)
 
     # =====================
-    # 🎫 TICKET SYSTEM
+    # 🎫 TICKET (FIXED RETURN SAFETY)
     # =====================
     def save_ticket(self, order_id, channel_id):
         try:
             with self.lock:
-                cur = self.conn.cursor()
-                cur.execute("""
+                self.conn.execute("""
                 INSERT OR REPLACE INTO tickets(order_id, channel_id)
                 VALUES(?, ?)
                 """, (order_id, channel_id))
                 self.conn.commit()
-        except Exception as e:
-            print("[MEMORY] save_ticket error:", e)
+        except:
+            pass
 
     def get_ticket(self, order_id):
         try:
@@ -156,10 +142,9 @@ class Memory:
                 "SELECT channel_id FROM tickets WHERE order_id=?",
                 (order_id,)
             )
-            result = cur.fetchone()
-            return result
-        except Exception as e:
-            print("[MEMORY] get_ticket error:", e)
+            row = cur.fetchone()
+            return row[0] if row else None
+        except:
             return None
 
     def get_order_by_channel(self, channel_id):
@@ -169,89 +154,57 @@ class Memory:
                 "SELECT order_id FROM tickets WHERE channel_id=?",
                 (channel_id,)
             )
-            result = cur.fetchone()
-            return result[0] if result else None
-        except Exception as e:
-            print("[MEMORY] get_order_by_channel error:", e)
+            row = cur.fetchone()
+            return row[0] if row else None
+        except:
             return None
 
     # =====================
-    # 📦 STOCK SYSTEM (ATOMIC SAFE)
+    # 📦 STOCK (ATOMIC SAFE)
     # =====================
     def minus_stock(self, item, amount=1):
         try:
             with self.lock:
                 cur = self.conn.cursor()
-
-                # 🔥 atomic decrement
                 cur.execute(
                     "UPDATE stock SET qty = qty - ? WHERE name=? AND qty >= ?",
                     (amount, item, amount)
                 )
-
                 self.conn.commit()
                 return cur.rowcount > 0
-
-        except Exception as e:
-            print("[STOCK] minus_stock error:", e)
+        except:
             return False
 
     def get_stock(self, item):
         try:
             cur = self.conn.cursor()
-            cur.execute(
-                "SELECT qty FROM stock WHERE name=?",
-                (item,)
-            )
-            result = cur.fetchone()
-            return result[0] if result else 0
-        except Exception as e:
-            print("[STOCK] get_stock error:", e)
+            cur.execute("SELECT qty FROM stock WHERE name=?", (item,))
+            row = cur.fetchone()
+            return row[0] if row else 0
+        except:
             return 0
 
     # =====================
-    # 🟢 LOW STOCK
-    # =====================
-    def get_low_stock_items(self, threshold=5):
-        try:
-            cur = self.conn.cursor()
-            cur.execute(
-                "SELECT name, qty FROM stock WHERE qty <= ?",
-                (threshold,)
-            )
-            return cur.fetchall()
-        except Exception as e:
-            print("[STOCK] low_stock error:", e)
-            return []
-
-    # =====================
-    # 💰 POINT SYSTEM
+    # 💰 POINTS
     # =====================
     def add_points(self, user, amount):
         try:
             with self.lock:
-                cur = self.conn.cursor()
-                cur.execute("""
-                    INSERT INTO points(user, point)
-                    VALUES(?, ?)
+                self.conn.execute("""
+                    INSERT INTO points(user,point)
+                    VALUES(?,?)
                     ON CONFLICT(user)
                     DO UPDATE SET point = point + ?
                 """, (user, amount, amount))
-
                 self.conn.commit()
-
-        except Exception as e:
-            print("[POINT] add_points error:", e)
+        except:
+            pass
 
     def get_points(self, user):
         try:
             cur = self.conn.cursor()
-            cur.execute(
-                "SELECT point FROM points WHERE user=?",
-                (user,)
-            )
-            result = cur.fetchone()
-            return result[0] if result else None
-        except Exception as e:
-            print("[POINT] get_points error:", e)
-            return None
+            cur.execute("SELECT point FROM points WHERE user=?", (user,))
+            row = cur.fetchone()
+            return row[0] if row else 0
+        except:
+            return 0
