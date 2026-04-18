@@ -14,7 +14,6 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
-# 🆕 SYSTEM VIEWS
 from cancel_view import CancelView
 from admin_dashboard import AdminDashboard
 from stock_view import StockView
@@ -65,15 +64,14 @@ async def on_ready():
 
 
     # =====================
-    # 🎛 REGISTER VIEWS (SAFE DEBUG VERSION)
+    # 🎛 SAFE VIEW REGISTER (FIXED)
     # =====================
-
-    def safe_add(view, name):
+    def safe_add(view_cls, name):
         try:
-            bot.add_view(view(bot))
-            print(f"✅ {name} OK")
+            bot.add_view(view_cls(bot))
+            print(f"✅ {name} REGISTERED")
         except Exception as e:
-            print(f"❌ {name} FAIL:", e)
+            print(f"❌ {name} ERROR:", e)
 
     safe_add(ShopView, "ShopView")
     safe_add(AdminView, "AdminView")
@@ -86,11 +84,13 @@ async def on_ready():
     # 📦 STOCK START
     # =====================
     try:
-        if hasattr(bot.stock, "start") and callable(bot.stock.start):
-            bot.stock.start()
-            print("📦 STOCK SYSTEM STARTED")
+        if hasattr(bot.stock, "start"):
+            result = bot.stock.start()
+            if hasattr(result, "__await__"):
+                await result
+        print("📦 STOCK STARTED")
     except Exception as e:
-        print("[STOCK START ERROR]", e)
+        print("[STOCK ERROR]", e)
 
 
     # =====================
@@ -101,11 +101,9 @@ async def on_ready():
             result = bot.order.start()
             if hasattr(result, "__await__"):
                 await result
-
-            print("🛒 ORDER SYSTEM STARTED")
-
+        print("🛒 ORDER STARTED")
     except Exception as e:
-        print("[ORDER START ERROR]", e)
+        print("[ORDER ERROR]", e)
 
 
 # =====================
@@ -113,32 +111,37 @@ async def on_ready():
 # =====================
 @bot.command()
 async def shop(ctx):
-    embed = discord.Embed(
-        title="🛒 SHOP ONLINE",
-        description="เลือกสินค้าด้านล่าง",
-        color=0x00ffcc
+    await ctx.send(
+        embed=discord.Embed(
+            title="🛒 SHOP ONLINE",
+            description="เลือกสินค้าด้านล่าง",
+            color=0x00ffcc
+        ),
+        view=ShopView(bot)
     )
-    await ctx.send(embed=embed, view=ShopView(bot))
 
 
 @bot.command()
 async def admin(ctx):
-    embed = discord.Embed(
-        title="🛠 ADMIN PANEL",
-        description="ระบบแอดมิน",
-        color=0xffcc00
+    await ctx.send(
+        embed=discord.Embed(
+            title="🛠 ADMIN PANEL",
+            color=0xffcc00
+        ),
+        view=AdminView(bot)
     )
-    await ctx.send(embed=embed, view=AdminView(bot))
 
 
 @bot.command()
 async def dashboard(ctx):
-    embed = discord.Embed(
-        title="🧠 ADMIN DASHBOARD",
-        description="จัดการระบบทั้งหมด",
-        color=0x2ecc71
+    await ctx.send(
+        embed=discord.Embed(
+            title="🧠 DASHBOARD",
+            description="จัดการระบบทั้งหมด",
+            color=0x2ecc71
+        ),
+        view=AdminDashboard(bot)
     )
-    await ctx.send(embed=embed, view=AdminDashboard(bot))
 
 
 # =====================
