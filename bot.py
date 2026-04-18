@@ -14,9 +14,6 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
-# from ui import CancelView
-# from ticket_view import TicketView
-
 # =====================
 # 🔥 INTENTS
 # =====================
@@ -32,7 +29,7 @@ bot.mem = Memory()
 # =====================
 # 📦 SYSTEMS
 # =====================
-bot.stock = StockSystem(bot.mem, bot)  # ✅ FIX: ส่ง bot เข้าไป
+bot.stock = StockSystem(bot.mem, bot)
 bot.ticket = TicketSystem(bot.brain, bot)
 bot.notify = NotifySystem(bot.brain, bot)
 bot.backup = BackupSystem(bot.brain, bot)
@@ -53,21 +50,21 @@ bot.order = OrderSystem(
 async def on_ready():
     print(f"🟢 LOGGED IN AS {bot.user}")
 
-    # กันรันซ้ำ
+    # กันรันซ้ำ (ดีแล้ว)
     if getattr(bot, "ready_done", False):
         return
     bot.ready_done = True
 
     # =====================
-    # 🎛 REGISTER VIEWS
+    # 🎛 REGISTER VIEWS (IMPORTANT FIX)
     # =====================
     try:
         bot.add_view(ShopView(bot))
         bot.add_view(AdminView(bot))
 
-        # ⚠️ ถ้ามีต้องเปิดเพิ่ม
-        # bot.add_view(CancelView())
-        # bot.add_view(TicketView())
+        # ถ้าเพิ่มระบบภายหลังค่อยเปิด
+        # bot.add_view(CancelView(bot))
+        # bot.add_view(TicketView(bot))
 
         print("✅ VIEWS REGISTERED")
 
@@ -75,22 +72,28 @@ async def on_ready():
         print("[VIEW REGISTER ERROR]", e)
 
     # =====================
-    # 📦 START STOCK SYSTEM (FIXED SAFE)
+    # 📦 STOCK START (FIX SAFE CHECK)
     # =====================
     try:
-        if hasattr(bot.stock, "start"):
+        if hasattr(bot.stock, "start") and callable(bot.stock.start):
             bot.stock.start()
             print("📦 STOCK SYSTEM STARTED")
     except Exception as e:
         print("[STOCK START ERROR]", e)
 
     # =====================
-    # 🛒 START ORDER SYSTEM (SAFE)
+    # 🛒 ORDER START (SAFE AWAIT SUPPORT FIX)
     # =====================
     try:
         if hasattr(bot.order, "start"):
-            bot.order.start()
+            if callable(bot.order.start):
+                # support both sync/async start
+                result = bot.order.start()
+                if hasattr(result, "__await__"):
+                    await result
+
             print("🛒 ORDER SYSTEM STARTED")
+
     except Exception as e:
         print("[ORDER START ERROR]", e)
 
