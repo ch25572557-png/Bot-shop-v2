@@ -13,10 +13,20 @@ class OrderSystem:
         self.last_alert = {}
         self._lock = asyncio.Lock()
 
-        # 🧠 FARM QUEUE (SAFE REAL QUEUE)
+        # 🧠 FARM QUEUE (SAFE)
         self.farm_queue = asyncio.Queue()
 
-        # start worker
+        # 🧠 CONTROL
+        self._started = False
+
+    # =====================
+    # 🚀 START WORKER (FIX MAIN ERROR)
+    # =====================
+    async def start(self):
+        if self._started:
+            return
+        self._started = True
+
         asyncio.create_task(self.farm_worker())
 
     # =====================
@@ -57,7 +67,6 @@ class OrderSystem:
         except:
             pass
 
-        # 📊 dashboard hook
         try:
             if hasattr(self, "on_dashboard_update"):
                 await self.on_dashboard_update()
@@ -67,7 +76,7 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # 🔥 STOCK ALERT SAFE
+    # 🔥 STOCK ALERT
     # =====================
     async def stock_alert(self, item, guild):
 
@@ -103,7 +112,7 @@ class OrderSystem:
             pass
 
     # =====================
-    # 🧠 FARM WORKER (REAL QUEUE SYSTEM)
+    # 🧠 FARM WORKER
     # =====================
     async def farm_worker(self):
 
@@ -111,12 +120,11 @@ class OrderSystem:
             try:
                 task = await self.farm_queue.get()
 
-                item = task["item"]
-                amount = task["amount"]
+                item = task.get("item")
+                amount = task.get("amount", 1)
 
-                await asyncio.sleep(3)  # simulate farm delay
+                await asyncio.sleep(3)
 
-                # add stock back
                 cur = self.mem.conn.cursor()
                 cur.execute(
                     "UPDATE stock SET qty = qty + ? WHERE name=?",
@@ -124,7 +132,8 @@ class OrderSystem:
                 )
                 self.mem.conn.commit()
 
-            except:
+            except Exception as e:
+                print("[FARM ERROR]", e)
                 await asyncio.sleep(2)
 
     # =====================
