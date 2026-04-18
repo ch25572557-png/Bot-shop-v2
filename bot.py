@@ -14,7 +14,6 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
-# ⚠️ ถ้ามีไฟล์ view เพิ่ม ให้ import เพิ่มตรงนี้
 # from ui import CancelView
 # from ticket_view import TicketView
 
@@ -33,7 +32,7 @@ bot.mem = Memory()
 # =====================
 # 📦 SYSTEMS
 # =====================
-bot.stock = StockSystem(bot.mem)
+bot.stock = StockSystem(bot.mem, bot)  # ✅ FIX: ส่ง bot เข้าไป
 bot.ticket = TicketSystem(bot.brain, bot)
 bot.notify = NotifySystem(bot.brain, bot)
 bot.backup = BackupSystem(bot.brain, bot)
@@ -60,22 +59,23 @@ async def on_ready():
     bot.ready_done = True
 
     # =====================
-    # 🎛 REGISTER VIEWS (สำคัญมาก)
+    # 🎛 REGISTER VIEWS
     # =====================
     try:
         bot.add_view(ShopView(bot))
         bot.add_view(AdminView(bot))
 
-        # ⚠️ เพิ่มถ้ามี
+        # ⚠️ ถ้ามีต้องเปิดเพิ่ม
         # bot.add_view(CancelView())
         # bot.add_view(TicketView())
 
         print("✅ VIEWS REGISTERED")
+
     except Exception as e:
         print("[VIEW REGISTER ERROR]", e)
 
     # =====================
-    # 📦 START STOCK SYSTEM
+    # 📦 START STOCK SYSTEM (FIXED SAFE)
     # =====================
     try:
         if hasattr(bot.stock, "start"):
@@ -85,7 +85,7 @@ async def on_ready():
         print("[STOCK START ERROR]", e)
 
     # =====================
-    # 🧠 START ORDER SYSTEM
+    # 🛒 START ORDER SYSTEM (SAFE)
     # =====================
     try:
         if hasattr(bot.order, "start"):
@@ -99,12 +99,20 @@ async def on_ready():
 # =====================
 @bot.command()
 async def shop(ctx):
-    embed = discord.Embed(title="🛒 SHOP ONLINE", color=0x00ffcc)
+    embed = discord.Embed(
+        title="🛒 SHOP ONLINE",
+        description="เลือกสินค้าด้านล่าง",
+        color=0x00ffcc
+    )
     await ctx.send(embed=embed, view=ShopView(bot))
 
 @bot.command()
 async def admin(ctx):
-    embed = discord.Embed(title="🛠 ADMIN PANEL", color=0xffcc00)
+    embed = discord.Embed(
+        title="🛠 ADMIN PANEL",
+        description="ระบบแอดมิน",
+        color=0xffcc00
+    )
     await ctx.send(embed=embed, view=AdminView(bot))
 
 # =====================
