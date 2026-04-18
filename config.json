@@ -1,12 +1,13 @@
 {
   "CHANNELS": {
-    "ORDER_CHANNEL": "ใส่ไอดีห้องแจ้งออเดอร์แอดมิน",
+    "ORDER_NOTIFY": "ใส่ไอดีห้องแจ้งออเดอร์แอดมิน",
     "LOG_CHANNEL": "ใส่ไอดีห้อง Logs",
     "TICKET_CATEGORY": "ใส่ไอดีหมวดหมู่ Ticket",
     "BACKUP_CHANNEL": "ใส่ไอดีห้อง Backup",
 
     "STOCK_ALERT_CHANNEL": "ใส่ไอดีห้องแจ้งของใกล้หมด",
-    "STOCK_PANEL_CHANNEL": "ใส่ไอดีห้องจัดการสต๊อก"
+    "STOCK_PANEL_CHANNEL": "ใส่ไอดีห้องจัดการสต๊อก",
+    "DASHBOARD_CHANNEL": "ใส่ไอดีห้อง dashboard (embed สรุป)"
   },
 
   "ROLES": {
@@ -24,6 +25,8 @@
 
     "STOCK_ALERT_COOLDOWN_SEC": 60,
 
-    "ALLOW_FARM_IF_NO_STOCK": true
+    "ALLOW_FARM_IF_NO_STOCK": true,
+
+    "AUTO_FARM_QUEUE": true
   }
 }
