@@ -49,6 +49,8 @@ class StockSelect(discord.ui.Select):
     def __init__(self, bot):
         self.bot = bot
 
+        items = []
+
         try:
             cur = bot.mem.conn.cursor()
             cur.execute("SELECT name FROM stock")
@@ -56,23 +58,28 @@ class StockSelect(discord.ui.Select):
         except:
             items = []
 
-        options = [
-            discord.SelectOption(label=i[0], value=i[0])
-            for i in items[:25]
-        ]
+        options = []
 
-        # ❗ กันไม่มีของ
+        for i in items[:25]:
+            options.append(
+                discord.SelectOption(
+                    label=i[0],
+                    value=i[0]
+                )
+            )
+
         if not options:
-            options = [
+            options.append(
                 discord.SelectOption(
                     label="ไม่มีสินค้าในสต๊อก",
                     value="none"
                 )
-            ]
+            )
 
         super().__init__(
             placeholder="📦 เลือกสินค้าที่ต้องการเติม",
-            options=options
+            options=options,
+            disabled=len(items) == 0
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -85,16 +92,9 @@ class StockSelect(discord.ui.Select):
                 ephemeral=True
             )
 
-        try:
-            await interaction.response.send_modal(
-                RestockModal(self.bot, value)
-            )
-
-        except Exception as e:
-            await interaction.response.send_message(
-                f"❌ error: {e}",
-                ephemeral=True
-            )
+        await interaction.response.send_modal(
+            RestockModal(self.bot, value)
+        )
 
 
 # =====================
