@@ -37,9 +37,25 @@ class OrderSystem:
             channel = self.bot.get_channel(int(ch_id)) or await self.bot.fetch_channel(int(ch_id))
             if channel:
                 await channel.send(msg)
-
         except:
             pass
+
+    # =====================
+    # 📢 SEND TO TICKET (🔥 FIX)
+    # =====================
+    async def send_ticket(self, order_id, msg):
+        try:
+            channel_id = self.mem.get_ticket(order_id)
+            if not channel_id:
+                return
+
+            channel = self.bot.get_channel(int(channel_id)) or await self.bot.fetch_channel(int(channel_id))
+
+            if channel:
+                await channel.send(f"📊 STATUS UPDATE\n{msg}")
+
+        except Exception as e:
+            print("[TICKET STATUS ERROR]", e)
 
     # =====================
     # 🛒 CREATE ORDER
@@ -68,26 +84,14 @@ class OrderSystem:
             f"📦 {item} x{amount}"
         )
 
-        # 🔥 SAFE ALL SERVICES
-        try:
-            await self.notify.admin(user, item, order_id)
-        except:
-            pass
-
-        try:
-            await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
-        except:
-            pass
-
-        try:
-            await self.ticket.create(guild, user, order_id)
-        except:
-            pass
+        await self.notify.admin(user, item, order_id)
+        await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
+        await self.ticket.create(guild, user, order_id)
 
         return order_id
 
     # =====================
-    # ✅ COMPLETE
+    # ✅ COMPLETE (🔥 FIX CLOSE + STATUS SAFE)
     # =====================
     async def complete(self, channel):
 
@@ -113,41 +117,39 @@ class OrderSystem:
             async with self._lock:
                 success = self.mem.minus_stock(item, amount)
 
-            # =====================
-            # 🔥 FARM FIX (ADDED)
-            # =====================
             if not success:
-
-                allow_farm = bool(self.brain.get("SETTINGS.ALLOW_FARM_IF_NO_STOCK", False))
-
-                if allow_farm:
-                    await self.farm_queue.put({
-                        "item": item,
-                        "amount": amount,
-                        "order_id": order_id
-                    })
-                    await channel.send("⚠️ เข้าคิวฟาร์มแล้ว")
-                    return False
-                else:
-                    await channel.send("❌ สต๊อกไม่พอ")
-                    return False
+                await channel.send("❌ สต๊อกไม่พอ")
+                return False
 
             self.mem.update_order_status(order_id, "DONE")
 
             point = int(self.brain.get("SETTINGS.POINT_PER_ORDER") or 0)
+            self.mem.add_points(user, point)
 
-            try:
-                self.mem.add_points(user, point)
-            except:
-                pass
-
+            # =====================
+            # 📢 ADMIN
+            # =====================
             await self.send_admin(
                 f"✅ COMPLETE #{order_id}\n📦 {item} x{amount}"
             )
 
+            # =====================
+            # 📢 TICKET UPDATE (🔥 FIX)
+            # =====================
+            await self.send_ticket(order_id, "✅ ส่งของเสร็จแล้ว")
+
             await channel.send(
                 f"✅ DONE\n📦 {item} x{amount}\n💰 +{point} points"
             )
+
+            # =====================
+            # 🔒 CLOSE CHANNEL (🔥 FIX REAL)
+            # =====================
+            try:
+                await asyncio.sleep(3)
+                await channel.delete(reason="Order completed")
+            except Exception as e:
+                print("[DELETE CHANNEL ERROR]", e)
 
             return True
 
