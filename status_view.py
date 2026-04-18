@@ -60,12 +60,14 @@ class StatusView(discord.ui.View):
         await interaction.response.send_message("📦 WAIT_CUSTOMER", ephemeral=True)
 
     # =====================
-    # ✅ DONE (CORE SAFE FLOW)
+    # ✅ DONE (FIXED + SAFE FINAL FLOW)
     # =====================
     @discord.ui.button(label="✅ ส่งของเสร็จแล้ว", style=discord.ButtonStyle.green)
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        # 🔒 โหลด order แบบ safe
+        # =====================
+        # 🔒 LOAD ORDER SAFE
+        # =====================
         try:
             data = self.bot.mem.get_order(self.order_id)
             if not data:
@@ -75,24 +77,40 @@ class StatusView(discord.ui.View):
             print("[STATUS] get_order error:", e)
             return
 
-        # 🔍 check status (รองรับโครงเก่า + ใหม่)
+        # =====================
+        # 🔍 SAFE STATUS PARSE (support old/new schema)
+        # =====================
+        status = None
+
         try:
+            data = list(data) + [None] * 5
             status = data[4]
         except:
-            status = data[2]
+            status = None
 
-        # ❗ กันกดซ้ำ / กัน conflict กับ ORDER LOCK
-        if status in ["DONE", "LOCKED"]:
+        # =====================
+        # ❗ BLOCK DUPLICATE COMPLETE
+        # =====================
+        if status in ("DONE", "LOCKED"):
             await interaction.response.send_message("❗ ออเดอร์นี้เสร็จแล้ว", ephemeral=True)
             return
 
-        await interaction.response.send_message("🔄 กำลังจบออเดอร์...", ephemeral=True)
+        # =====================
+        # 🔄 USER FEEDBACK
+        # =====================
+        try:
+            await interaction.response.send_message("🔄 กำลังจบออเดอร์...", ephemeral=True)
+        except:
+            pass
 
-        # 🚀 call main system
+        # =====================
+        # 🚀 CALL MAIN SYSTEM (SAFE WRAP)
+        # =====================
         try:
             await self.bot.order.complete(interaction.channel)
         except Exception as e:
             print("[STATUS] complete error:", e)
+
             try:
                 await interaction.channel.send("❌ error ตอน complete order")
             except:
