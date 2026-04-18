@@ -45,11 +45,12 @@ bot.order = OrderSystem(
     bot.ticket,
     bot.notify,
     bot.backup,
-    bot.brain
+    bot.brain,
+    bot
 )
 
 # =====================
-# 🚀 READY (SAFE FIX)
+# 🚀 READY (FIXED PROPER LOOP START)
 # =====================
 @bot.event
 async def on_ready():
@@ -61,11 +62,11 @@ async def on_ready():
     except Exception as e:
         print("[VIEW REGISTER ERROR]", e)
 
-    # 🔥 SAFE START FARM WORKER (FIXED)
+    # 🔥 FIX: ใช้ start() แทน create_task ตรงๆ
     if not hasattr(bot, "farm_started"):
         bot.farm_started = True
 
-        asyncio.create_task(bot.order.farm_worker())
+        await bot.order.start()
 
         print("🧠 FARM WORKER STARTED")
 
