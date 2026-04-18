@@ -8,9 +8,6 @@ class Brain:
         self._version = 0
         self.reload()
 
-    # =====================
-    # 🔄 LOAD CONFIG (SAFE + ATOMIC + FINAL)
-    # =====================
     def reload(self):
         try:
             with open("config.json", "r", encoding="utf-8") as f:
@@ -22,15 +19,9 @@ class Brain:
 
         except Exception as e:
             print("[BRAIN ERROR] load config failed:", e)
-            # ❗ keep old data (DO NOT WIPE IN PRODUCTION)
-            # กันระบบพังทั้ง bot
 
-    # =====================
-    # 🧠 GET VALUE (FAST + SAFE + STABLE)
-    # =====================
     def get(self, path, default=None):
         try:
-            # snapshot reference (fast, no long lock)
             data = self._data
 
             for key in path.split("."):
@@ -44,8 +35,6 @@ class Brain:
         except:
             return default
 
-    # =====================
-    # 🔧 EXTRA (OPTIONAL BUT FINAL STANDARD)
-    # =====================
-    def version(self):
+    # 🔥 FIX: rename method
+    def get_version(self):
         return self._version
