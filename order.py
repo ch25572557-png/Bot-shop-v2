@@ -3,6 +3,7 @@ import time
 
 class OrderSystem:
     def __init__(self, mem, ticket, notify, backup, brain):
+
         self.mem = mem
         self.ticket = ticket
         self.notify = notify
@@ -12,15 +13,16 @@ class OrderSystem:
         self.last_alert = {}
         self._lock = asyncio.Lock()
 
+        # 🧠 FARM QUEUE (NEW)
+        self.farm_queue = []
+
     # =====================
     # 🛒 CREATE ORDER
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
         try:
-            amount = int(amount)
-            if amount <= 0:
-                amount = 1
+            amount = max(int(amount), 1)
         except:
             amount = 1
 
@@ -35,28 +37,45 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # 🔔 notify (safe)
+        # =====================
+        # 🔔 SAFE NOTIFY
+        # =====================
         try:
             await self.notify.admin(user, item, order_id)
         except:
             pass
 
-        # 💾 backup (safe)
+        # =====================
+        # 💾 BACKUP
+        # =====================
         try:
-            await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
+            await self.backup.log(
+                f"ORDER #{order_id} | {user} | {item} x{amount}"
+            )
         except:
             pass
 
-        # 🎫 ticket (safe)
+        # =====================
+        # 🎫 TICKET
+        # =====================
         try:
             await self.ticket.create(guild, user, order_id)
+        except:
+            pass
+
+        # =====================
+        # 📊 DASHBOARD HOOK (NEW)
+        # =====================
+        try:
+            if hasattr(self, "on_dashboard_update"):
+                await self.on_dashboard_update()
         except:
             pass
 
         return order_id
 
     # =====================
-    # 🔥 STOCK ALERT (SAFE + ANTI SPAM)
+    # 🔥 STOCK ALERT (SAFE)
     # =====================
     async def stock_alert(self, item, guild):
 
@@ -81,7 +100,7 @@ class OrderSystem:
         self.last_alert[key] = now
 
         try:
-            ch_id = self.brain.get("CHANNELS.LOW_STOCK_ALERT")
+            ch_id = self.brain.get("CHANNELS.STOCK_ALERT_CHANNEL")
             if not ch_id:
                 return
 
@@ -92,7 +111,38 @@ class OrderSystem:
             pass
 
     # =====================
-    # ✅ COMPLETE ORDER (FARM SAFE FINAL)
+    # 🧠 FARM QUEUE RUNNER (NEW REAL SYSTEM)
+    # =====================
+    async def farm_worker(self):
+
+        while True:
+
+            try:
+                if not self.farm_queue:
+                    await asyncio.sleep(2)
+                    continue
+
+                task = self.farm_queue.pop(0)
+
+                item = task.get("item")
+                amount = task.get("amount", 1)
+
+                # 🔁 simulate farming delay
+                await asyncio.sleep(3)
+
+                # 📦 add stock back (farm success)
+                cur = self.mem.conn.cursor()
+                cur.execute(
+                    "UPDATE stock SET qty = qty + ? WHERE name=?",
+                    (amount, item)
+                )
+                self.mem.conn.commit()
+
+            except:
+                await asyncio.sleep(2)
+
+    # =====================
+    # ✅ COMPLETE ORDER
     # =====================
     async def complete(self, channel):
 
@@ -104,7 +154,6 @@ class OrderSystem:
         if not data:
             return False
 
-        # 🔒 SAFE UNPACK
         try:
             user, item, amount, roblox_user, status = data
         except:
@@ -114,19 +163,29 @@ class OrderSystem:
             return False
 
         # =====================
-        # 📦 STOCK LOCK (IMPORTANT)
+        # 📦 STOCK LOCK
         # =====================
         async with self._lock:
             success = self.mem.minus_stock(item, amount)
 
-        # =====================
-        # 🟡 FARM MODE (NO BLOCK ORDER)
-        # =====================
         allow_farm = bool(self.brain.get("SETTINGS.ALLOW_FARM_IF_NO_STOCK", False))
 
+        # =====================
+        # 🟡 FARM MODE
+        # =====================
         if not success:
+
             if allow_farm:
-                await channel.send("⚠️ ไม่มีสต๊อก → เข้าสู่โหมดฟาร์ม")
+
+                await channel.send("⚠️ ไม่มีสต๊อก → เข้าคิวฟาร์ม")
+
+                # 🧠 ADD TO FARM QUEUE (NEW)
+                self.farm_queue.append({
+                    "item": item,
+                    "amount": amount,
+                    "order_id": order_id
+                })
+
             else:
                 await channel.send("❌ สต๊อกไม่พอ")
                 return False
@@ -150,7 +209,7 @@ class OrderSystem:
             pass
 
         # =====================
-        # 🔥 STOCK ALERT CHECK
+        # 🔥 STOCK ALERT
         # =====================
         try:
             await self.stock_alert(item, channel.guild)
@@ -159,7 +218,7 @@ class OrderSystem:
 
         # =====================
         # 💾 BACKUP
-        # =====================
+        =====================
         try:
             await self.backup.log(
                 f"COMPLETE #{order_id} | {user} | {item} x{amount}"
@@ -183,7 +242,7 @@ class OrderSystem:
             pass
 
         # =====================
-        # ⏱ CLOSE CHANNEL
+        # ⏱ CLOSE
         # =====================
         await asyncio.sleep(10)
 
