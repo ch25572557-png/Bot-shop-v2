@@ -2,16 +2,55 @@ class StockSystem:
     def __init__(self, mem):
         self.mem = mem
 
-    def minus(self, item):
+    # =====================
+    # 📦 MINUS STOCK (ปลอดภัย)
+    # =====================
+    def minus(self, item, amount=1):
         self.mem.cur.execute(
-            "UPDATE stock SET qty=qty-1 WHERE name=?",
+            "SELECT qty FROM stock WHERE name=?",
             (item,)
         )
-        self.mem.conn.commit()
+        result = self.mem.cur.fetchone()
 
-    def add(self, name, qty, price):
+        if not result:
+            return False  # ไม่มีสินค้า
+
+        qty = result[0]
+
+        if qty < amount:
+            return False  # ของไม่พอ
+
         self.mem.cur.execute(
-            "INSERT INTO stock VALUES(?,?,?)",
-            (name, qty, price)
+            "UPDATE stock SET qty = qty - ? WHERE name=?",
+            (amount, item)
         )
         self.mem.conn.commit()
+        return True
+
+    # =====================
+    # ➕ ADD / UPDATE STOCK
+    # =====================
+    def add(self, name, qty, price):
+
+        # เช็คว่ามีอยู่แล้วไหม
+        self.mem.cur.execute(
+            "SELECT qty FROM stock WHERE name=?",
+            (name,)
+        )
+        result = self.mem.cur.fetchone()
+
+        if result:
+            # ถ้ามี → เพิ่ม qty
+            self.mem.cur.execute(
+                "UPDATE stock SET qty = qty + ?, price=? WHERE name=?",
+                (qty, price, name)
+            )
+        else:
+            # ถ้าไม่มี → สร้างใหม่
+            self.mem.cur.execute(
+                "INSERT INTO stock(name, qty, price) VALUES(?,?,?)",
+                (name, qty, price)
+            )
+
+        self.mem.conn.commit()
+        return True
