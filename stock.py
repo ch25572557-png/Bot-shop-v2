@@ -1,9 +1,12 @@
+import threading
+
 class StockSystem:
     def __init__(self, mem):
         self.mem = mem
+        self.lock = threading.Lock()
 
     # =====================
-    # 📦 MINUS STOCK (ATOMIC SAFE)
+    # 📦 MINUS STOCK (ATOMIC + SAFE FINAL)
     # =====================
     def minus(self, item, amount=1):
 
@@ -14,18 +17,29 @@ class StockSystem:
         except:
             amount = 1
 
-        # 🔒 atomic update (กัน stock ติดลบ)
-        self.mem.cur.execute(
-            "UPDATE stock SET qty = qty - ? WHERE name=? AND qty >= ?",
-            (amount, item, amount)
-        )
+        try:
+            with self.lock:
+                cur = self.mem.conn.cursor()
 
-        self.mem.conn.commit()
+                cur.execute(
+                    """
+                    UPDATE stock
+                    SET qty = qty - ?
+                    WHERE name = ? AND qty >= ?
+                    """,
+                    (amount, item, amount)
+                )
 
-        return self.mem.cur.rowcount > 0
+                self.mem.conn.commit()
+
+                return cur.rowcount > 0
+
+        except Exception as e:
+            print("[STOCK] minus error:", e)
+            return False
 
     # =====================
-    # ➕ ADD / UPDATE STOCK
+    # ➕ ADD STOCK (SAFE UPSERT STYLE)
     # =====================
     def add(self, name, qty, price):
 
@@ -35,36 +49,57 @@ class StockSystem:
         except:
             return False
 
-        # 🔍 check exists
-        self.mem.cur.execute(
-            "SELECT qty FROM stock WHERE name=?",
-            (name,)
-        )
-        result = self.mem.cur.fetchone()
+        try:
+            with self.lock:
+                cur = self.mem.conn.cursor()
 
-        if result:
-            # ➕ update stock
-            self.mem.cur.execute(
-                "UPDATE stock SET qty = qty + ?, price=? WHERE name=?",
-                (qty, price, name)
-            )
-        else:
-            # 🆕 insert new
-            self.mem.cur.execute(
-                "INSERT INTO stock(name, qty, price) VALUES(?,?,?)",
-                (name, qty, price)
-            )
+                # 🔍 check exists
+                cur.execute(
+                    "SELECT qty FROM stock WHERE name=?",
+                    (name,)
+                )
+                result = cur.fetchone()
 
-        self.mem.conn.commit()
-        return True
+                if result:
+                    cur.execute(
+                        """
+                        UPDATE stock
+                        SET qty = qty + ?, price = ?
+                        WHERE name = ?
+                        """,
+                        (qty, price, name)
+                    )
+                else:
+                    cur.execute(
+                        """
+                        INSERT INTO stock(name, qty, price)
+                        VALUES(?,?,?)
+                        """,
+                        (name, qty, price)
+                    )
+
+                self.mem.conn.commit()
+                return True
+
+        except Exception as e:
+            print("[STOCK] add error:", e)
+            return False
 
     # =====================
-    # 📊 GET STOCK
+    # 📊 GET STOCK (SAFE READ)
     # =====================
     def get(self, item):
-        self.mem.cur.execute(
-            "SELECT qty FROM stock WHERE name=?",
-            (item,)
-        )
-        result = self.mem.cur.fetchone()
-        return result[0] if result else 0
+
+        try:
+            cur = self.mem.conn.cursor()
+            cur.execute(
+                "SELECT qty FROM stock WHERE name=?",
+                (item,)
+            )
+
+            result = cur.fetchone()
+            return result[0] if result else 0
+
+        except Exception as e:
+            print("[STOCK] get error:", e)
+            return 0
