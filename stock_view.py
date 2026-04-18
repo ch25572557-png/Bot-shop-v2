@@ -34,9 +34,9 @@ class RestockModal(discord.ui.Modal, title="📦 เติมสต๊อก"):
                 ephemeral=True
             )
 
-        except:
+        except Exception as e:
             await interaction.response.send_message(
-                "❌ error",
+                f"❌ error: {e}",
                 ephemeral=True
             )
 
@@ -49,34 +49,56 @@ class StockSelect(discord.ui.Select):
     def __init__(self, bot):
         self.bot = bot
 
-        cur = bot.mem.conn.cursor()
-        cur.execute("SELECT name FROM stock")
-        items = cur.fetchall()
+        try:
+            cur = bot.mem.conn.cursor()
+            cur.execute("SELECT name FROM stock")
+            items = cur.fetchall()
+        except:
+            items = []
 
         options = []
 
         for i in items[:25]:
-            name = i[0]
-
             options.append(
                 discord.SelectOption(
-                    label=name,
-                    value=name
+                    label=i[0],
+                    value=i[0]
                 )
             )
 
+        # 🔥 กัน dropdown ว่าง (สำคัญ)
+        if not options:
+            options = [
+                discord.SelectOption(
+                    label="ไม่มีสินค้าในสต๊อก",
+                    value="none"
+                )
+            ]
+
         super().__init__(
             placeholder="📦 เลือกสินค้าที่ต้องการเติม",
-            options=options
+            options=options,
+            disabled=(len(items) == 0)
         )
 
     async def callback(self, interaction: discord.Interaction):
 
-        item = self.values[0]
+        if self.values[0] == "none":
+            return await interaction.response.send_message(
+                "❌ ไม่มีสินค้าในสต๊อก",
+                ephemeral=True
+            )
 
-        await interaction.response.send_modal(
-            RestockModal(self.bot, item)
-        )
+        try:
+            await interaction.response.send_modal(
+                RestockModal(self.bot, self.values[0])
+            )
+
+        except Exception as e:
+            await interaction.response.send_message(
+                f"❌ error: {e}",
+                ephemeral=True
+            )
 
 
 # =====================
