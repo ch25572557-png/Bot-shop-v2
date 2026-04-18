@@ -1,8 +1,10 @@
 import sqlite3
+import time
 
 class Memory:
     def __init__(self):
-        self.conn = sqlite3.connect("shop.db")
+        # 🟡 กัน thread crash (สำคัญกับ discord bot)
+        self.conn = sqlite3.connect("shop.db", check_same_thread=False)
         self.cur = self.conn.cursor()
 
         # =====================
@@ -17,7 +19,7 @@ class Memory:
         )
         """)
 
-        # 🆕 เพิ่ม column (ไม่พัง DB เดิม)
+        # 🆕 SAFE EXTENSION
         self._safe_add_column("orders", "amount", "INTEGER DEFAULT 1")
         self._safe_add_column("orders", "roblox_user", "TEXT")
 
@@ -59,7 +61,9 @@ class Memory:
     # =====================
     def _safe_add_column(self, table, column, definition):
         try:
-            self.cur.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+            self.cur.execute(
+                f"ALTER TABLE {table} ADD COLUMN {column} {definition}"
+            )
             self.conn.commit()
         except:
             pass
@@ -67,7 +71,6 @@ class Memory:
     # =====================
     # 📦 ORDER SYSTEM
     # =====================
-
     def add_order(self, user, item, amount=1, roblox_user=None, status="WAIT"):
         self.cur.execute(
             "INSERT INTO orders(user,item,amount,roblox_user,status) VALUES(?,?,?,?,?)",
@@ -99,7 +102,6 @@ class Memory:
     # =====================
     # 🎫 TICKET SYSTEM
     # =====================
-
     def save_ticket(self, order_id, channel_id):
         self.cur.execute("""
         INSERT OR REPLACE INTO tickets(order_id, channel_id)
@@ -125,7 +127,6 @@ class Memory:
     # =====================
     # 📦 STOCK SYSTEM
     # =====================
-
     def minus_stock(self, item, amount=1):
         self.cur.execute(
             "SELECT qty FROM stock WHERE name=?",
@@ -142,13 +143,12 @@ class Memory:
             return False
 
         self.cur.execute(
-            "UPDATE stock SET qty = qty - ? WHERE name=?",
-            (amount, item)
+            "UPDATE stock SET qty=? WHERE name=?",
+            (qty - amount, item)
         )
         self.conn.commit()
         return True
 
-    # 🆕 เพิ่มฟังก์ชันเช็ค stock (ไม่กระทบของเดิม)
     def get_stock(self, item):
         self.cur.execute(
             "SELECT qty FROM stock WHERE name=?",
@@ -157,10 +157,17 @@ class Memory:
         result = self.cur.fetchone()
         return result[0] if result else 0
 
+    # 🆕 STOCK ALERT SUPPORT
+    def get_low_stock_items(self, threshold=5):
+        self.cur.execute(
+            "SELECT name, qty FROM stock WHERE qty <= ?",
+            (threshold,)
+        )
+        return self.cur.fetchall()
+
     # =====================
     # 💰 POINT SYSTEM
     # =====================
-
     def add_points(self, user, amount):
         self.cur.execute(
             "INSERT INTO points(user, point) VALUES(?, ?) "
