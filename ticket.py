@@ -6,19 +6,29 @@ class TicketSystem:
         self.brain = brain
         self.bot = bot
 
+    # =====================
+    # 🎫 CREATE TICKET
+    # =====================
     async def create(self, guild, user, order_id):
 
         # =====================
-        # 📁 GET CATEGORY
+        # 📁 CATEGORY SAFE
         # =====================
+        category = None
+
         try:
-            category_id = int(self.brain.get("CHANNELS.TICKET_CATEGORY"))
-            category = guild.get_channel(category_id)
+            category_id = self.brain.get("CHANNELS.TICKET_CATEGORY")
+            if category_id:
+                category = guild.get_channel(int(category_id))
+
+            if not category:
+                category = await guild.fetch_channel(int(category_id))
+
         except:
             category = None
 
         # =====================
-        # 🔒 PERMISSION
+        # 🔒 PERMISSIONS
         # =====================
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -35,40 +45,38 @@ class TicketSystem:
                 category=category,
                 overwrites=overwrites
             )
-        except:
+        except Exception as e:
+            print("[TICKET] create error:", e)
             return None
 
         # =====================
-        # 💾 SAVE LINK
+        # 💾 SAVE TICKET LINK
         # =====================
         try:
             self.bot.mem.save_ticket(order_id, str(channel.id))
-        except:
-            pass
+        except Exception as e:
+            print("[TICKET] save error:", e)
 
         # =====================
-        # 📦 GET ORDER DATA
+        # 📦 ORDER DATA
         # =====================
-        try:
-            data = self.bot.mem.get_order(order_id)
-        except:
-            data = None
+        data = self.bot.mem.get_order(order_id)
 
-        # 🧠 รองรับของเก่า + ใหม่
+        item = "Unknown"
+        amount = 1
+        roblox_user = None
+
         if data:
             try:
                 user_db, item, amount, roblox_user, status = data
             except:
-                user_db, item, status = data
-                amount = 1
-                roblox_user = None
-        else:
-            item = "Unknown"
-            amount = 1
-            roblox_user = None
+                try:
+                    user_db, item, status = data
+                except:
+                    pass
 
         # =====================
-        # 📢 SEND MESSAGE
+        # 📢 MESSAGE + STATUS VIEW
         # =====================
         try:
             msg = (
@@ -86,7 +94,8 @@ class TicketSystem:
                 msg,
                 view=StatusView(self.bot, order_id)
             )
-        except:
-            pass
+
+        except Exception as e:
+            print("[TICKET] send error:", e)
 
         return channel
