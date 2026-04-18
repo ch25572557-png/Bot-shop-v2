@@ -1,6 +1,5 @@
 import discord
 import os
-import asyncio
 from discord.ext import commands
 
 from brain import Brain
@@ -16,10 +15,9 @@ from shop import ShopView
 from admin import AdminView
 
 # =====================
-# 🔥 INTENTS
+# 🔥 INTENTS (FIXED CLEAN)
 # =====================
 intents = discord.Intents.all()
-intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -50,7 +48,7 @@ bot.order = OrderSystem(
 )
 
 # =====================
-# 🚀 READY
+# 🚀 READY EVENT
 # =====================
 @bot.event
 async def on_ready():
@@ -58,7 +56,7 @@ async def on_ready():
     print(f"🟢 LOGGED IN AS {bot.user}")
 
     # =====================
-    # 🎛 VIEW REGISTER SAFE
+    # 🎛 REGISTER VIEWS
     # =====================
     try:
         bot.add_view(ShopView(bot))
@@ -67,14 +65,14 @@ async def on_ready():
         print("[VIEW REGISTER ERROR]", e)
 
     # =====================
-    # 🧠 FARM START SAFE (FIXED)
+    # 🧠 FARM START (FIXED - NO AWAIT)
     # =====================
-    if not getattr(bot, "farm_started", False):
+    if not hasattr(bot, "farm_started"):
 
         bot.farm_started = True
 
         try:
-            await bot.order.start()
+            bot.order.start()  # ✅ FIX: no await
             print("🧠 FARM WORKER STARTED")
         except Exception as e:
             print("[FARM START ERROR]", e)
