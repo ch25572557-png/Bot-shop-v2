@@ -12,24 +12,24 @@ class Memory:
         self.lock = threading.Lock()
 
         # =====================
-        # ⚙️ ENABLE WAL (FIXED POSITION)
+        # ⚙️ DB MODE (SAFE)
         # =====================
         with self.lock:
             self.conn.execute("PRAGMA journal_mode=WAL")
+            self.conn.execute("PRAGMA synchronous=NORMAL")
 
         # =====================
         # 📦 ORDERS
         # =====================
         with self.lock:
-            cur = self.conn.cursor()
-            cur.execute("""
+            self.conn.execute("""
             CREATE TABLE IF NOT EXISTS orders(
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user TEXT,
-                item TEXT,
+                user TEXT NOT NULL,
+                item TEXT NOT NULL,
                 amount INTEGER DEFAULT 1,
                 roblox_user TEXT,
-                status TEXT
+                status TEXT NOT NULL
             )
             """)
 
@@ -37,12 +37,11 @@ class Memory:
         # 📦 STOCK
         # =====================
         with self.lock:
-            cur = self.conn.cursor()
-            cur.execute("""
+            self.conn.execute("""
             CREATE TABLE IF NOT EXISTS stock(
                 name TEXT PRIMARY KEY,
-                qty INTEGER,
-                price REAL
+                qty INTEGER NOT NULL CHECK(qty >= 0),
+                price REAL NOT NULL
             )
             """)
 
@@ -50,11 +49,10 @@ class Memory:
         # 💰 POINTS
         # =====================
         with self.lock:
-            cur = self.conn.cursor()
-            cur.execute("""
+            self.conn.execute("""
             CREATE TABLE IF NOT EXISTS points(
                 user TEXT PRIMARY KEY,
-                point INTEGER
+                point INTEGER DEFAULT 0
             )
             """)
 
@@ -62,8 +60,7 @@ class Memory:
         # 🎫 TICKETS
         # =====================
         with self.lock:
-            cur = self.conn.cursor()
-            cur.execute("""
+            self.conn.execute("""
             CREATE TABLE IF NOT EXISTS tickets(
                 order_id INTEGER PRIMARY KEY,
                 channel_id TEXT
@@ -76,6 +73,11 @@ class Memory:
     # 📦 ORDER
     # =====================
     def add_order(self, user, item, amount=1, roblox_user=None, status="WAIT"):
+        try:
+            amount = max(int(amount), 1)
+        except:
+            amount = 1
+
         try:
             with self.lock:
                 cur = self.conn.cursor()
@@ -93,7 +95,7 @@ class Memory:
         try:
             cur = self.conn.cursor()
             cur.execute(
-                "SELECT user,item,amount,roblox_user,status FROM orders WHERE id=?",
+                "SELECT id,user,item,amount,roblox_user,status FROM orders WHERE id=?",
                 (order_id,)
             )
             return cur.fetchone()
@@ -122,7 +124,7 @@ class Memory:
             print("[MEMORY] update_order_status error:", e)
 
     # =====================
-    # 🎫 TICKET (FIXED RETURN SAFETY)
+    # 🎫 TICKET
     # =====================
     def save_ticket(self, order_id, channel_id):
         try:
@@ -160,18 +162,23 @@ class Memory:
             return None
 
     # =====================
-    # 📦 STOCK (ATOMIC SAFE)
+    # 📦 STOCK (SAFE + FARM SUPPORT)
     # =====================
     def minus_stock(self, item, amount=1):
+        try:
+            amount = max(int(amount), 1)
+        except:
+            amount = 1
+
         try:
             with self.lock:
                 cur = self.conn.cursor()
                 cur.execute(
-                    "UPDATE stock SET qty = qty - ? WHERE name=? AND qty >= ?",
-                    (amount, item, amount)
+                    "UPDATE stock SET qty = qty - ? WHERE name=?",
+                    (amount, item)
                 )
                 self.conn.commit()
-                return cur.rowcount > 0
+                return True
         except:
             return False
 
