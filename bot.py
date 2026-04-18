@@ -14,6 +14,10 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
+# 🆕 CANCEL SYSTEM
+from cancel_view import CancelView
+
+
 # =====================
 # 🔥 INTENTS
 # =====================
@@ -50,21 +54,17 @@ bot.order = OrderSystem(
 async def on_ready():
     print(f"🟢 LOGGED IN AS {bot.user}")
 
-    # กันรันซ้ำ (ดีแล้ว)
     if getattr(bot, "ready_done", False):
         return
     bot.ready_done = True
 
     # =====================
-    # 🎛 REGISTER VIEWS (IMPORTANT FIX)
+    # 🎛 REGISTER VIEWS
     # =====================
     try:
         bot.add_view(ShopView(bot))
         bot.add_view(AdminView(bot))
-
-        # ถ้าเพิ่มระบบภายหลังค่อยเปิด
-        # bot.add_view(CancelView(bot))
-        # bot.add_view(TicketView(bot))
+        bot.add_view(CancelView(bot))  # ✅ FIXED
 
         print("✅ VIEWS REGISTERED")
 
@@ -72,7 +72,7 @@ async def on_ready():
         print("[VIEW REGISTER ERROR]", e)
 
     # =====================
-    # 📦 STOCK START (FIX SAFE CHECK)
+    # 📦 STOCK START
     # =====================
     try:
         if hasattr(bot.stock, "start") and callable(bot.stock.start):
@@ -82,15 +82,13 @@ async def on_ready():
         print("[STOCK START ERROR]", e)
 
     # =====================
-    # 🛒 ORDER START (SAFE AWAIT SUPPORT FIX)
+    # 🛒 ORDER START
     # =====================
     try:
         if hasattr(bot.order, "start"):
-            if callable(bot.order.start):
-                # support both sync/async start
-                result = bot.order.start()
-                if hasattr(result, "__await__"):
-                    await result
+            result = bot.order.start()
+            if hasattr(result, "__await__"):
+                await result
 
             print("🛒 ORDER SYSTEM STARTED")
 
@@ -109,6 +107,7 @@ async def shop(ctx):
     )
     await ctx.send(embed=embed, view=ShopView(bot))
 
+
 @bot.command()
 async def admin(ctx):
     embed = discord.Embed(
@@ -117,6 +116,7 @@ async def admin(ctx):
         color=0xffcc00
     )
     await ctx.send(embed=embed, view=AdminView(bot))
+
 
 # =====================
 # 🚀 RUN BOT
