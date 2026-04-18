@@ -7,26 +7,26 @@ class TicketSystem:
         self.bot = bot
 
     # =====================
-    # 📢 ADMIN SEND (SAFE)
+    # 📢 ADMIN SEND (EMBED FIX)
     # =====================
-    async def send_to_admin(self, guild, message: str):
+    async def send_to_admin(self, guild, title, desc):
         try:
             ch_id = self.brain.get("CHANNELS.ORDER_NOTIFY")
             if not ch_id:
                 return
 
-            try:
-                channel = self.bot.get_channel(int(ch_id))
-                if channel is None:
-                    channel = await self.bot.fetch_channel(int(ch_id))
-            except:
-                return
+            channel = self.bot.get_channel(int(ch_id)) or await self.bot.fetch_channel(int(ch_id))
 
             if channel:
-                await channel.send(message)
+                embed = discord.Embed(
+                    title=title,
+                    description=desc,
+                    color=0x00ffcc
+                )
+                await channel.send(embed=embed)
 
-        except:
-            pass
+        except Exception as e:
+            print("[ADMIN SEND ERROR]", e)
 
     # =====================
     # 🎫 CREATE TICKET
@@ -42,22 +42,18 @@ class TicketSystem:
             category_id = self.brain.get("CHANNELS.TICKET_CATEGORY")
 
             if category_id:
-                try:
-                    ch = guild.get_channel(int(category_id))
+                ch = guild.get_channel(int(category_id))
+                if isinstance(ch, discord.CategoryChannel):
+                    category = ch
+                else:
+                    ch = await guild.fetch_channel(int(category_id))
                     if isinstance(ch, discord.CategoryChannel):
                         category = ch
-                    else:
-                        ch = await guild.fetch_channel(int(category_id))
-                        if isinstance(ch, discord.CategoryChannel):
-                            category = ch
-                except:
-                    category = None
-
         except:
             category = None
 
         # =====================
-        # 🔒 PERMISSION SAFE
+        # 🔒 PERMISSION
         # =====================
         try:
             overwrites = {
@@ -81,7 +77,7 @@ class TicketSystem:
             return None
 
         # =====================
-        # 💾 SAVE TICKET
+        # 💾 SAVE
         # =====================
         try:
             self.bot.mem.save_ticket(order_id, str(channel.id))
@@ -89,7 +85,7 @@ class TicketSystem:
             pass
 
         # =====================
-        # 📦 ORDER LOAD SAFE
+        # 📦 ORDER DATA
         # =====================
         item = "Unknown"
         amount = 1
@@ -98,42 +94,43 @@ class TicketSystem:
         try:
             data = self.bot.mem.get_order(order_id)
             if data:
-                data = list(data) + [None]*5
-                _, item, amount, roblox_user, _ = data[:5]
+                _, item, amount, roblox_user, _ = list(data)[:5]
         except:
             pass
 
         # =====================
-        # 📢 ADMIN NOTIFY
+        # 📢 ADMIN EMBED (FIX)
         # =====================
         await self.send_to_admin(
             guild,
-            f"🆕 ORDER #{order_id}\n"
-            f"👤 {user}\n"
-            f"📦 {item} x{amount}"
+            "🆕 NEW ORDER",
+            f"Order ID: #{order_id}\nUser: {user}\nItem: {item} x{amount}"
         )
 
         # =====================
-        # 📢 TICKET MESSAGE
+        # 🎫 TICKET EMBED (FIX)
         # =====================
-        try:
-            msg = (
-                f"🎫 ORDER #{order_id}\n"
-                f"👤 {user.mention}\n"
-                f"📦 {item} x{amount}\n"
-            )
+        embed = discord.Embed(
+            title="🎫 TICKET CREATED",
+            description=f"Order #{order_id}",
+            color=0x3498db
+        )
 
-            if roblox_user:
-                msg += f"🎮 Roblox: {roblox_user}\n"
+        embed.add_field(name="👤 User", value=user.mention, inline=False)
+        embed.add_field(name="📦 Item", value=f"{item} x{amount}", inline=False)
 
-            msg += "\n⚙️ ใช้ปุ่มด้านล่างเพื่ออัปเดตสถานะ"
+        if roblox_user:
+            embed.add_field(name="🎮 Roblox", value=roblox_user, inline=False)
 
-            await channel.send(
-                msg,
-                view=StatusView(self.bot, order_id)
-            )
+        embed.add_field(
+            name="⚙️ Status",
+            value="ใช้ปุ่มด้านล่างเพื่อจัดการออเดอร์",
+            inline=False
+        )
 
-        except:
-            pass
+        # =====================
+        # 🔘 STATUS VIEW
+        # =====================
+        await channel.send(embed=embed, view=StatusView(self.bot, order_id))
 
         return channel
