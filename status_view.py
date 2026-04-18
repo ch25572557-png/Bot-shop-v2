@@ -12,22 +12,24 @@ class StatusView(discord.ui.View):
     # =====================
     @discord.ui.button(label="⏳ รอแอดมินรับออเดอร์", style=discord.ButtonStyle.gray)
     async def wait_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
+
         try:
             self.bot.mem.update_order_status(self.order_id, "WAIT_ADMIN")
-        except:
-            pass
+        except Exception as e:
+            print(e)
 
-        await interaction.response.send_message("⏳ อัปเดตเป็น WAIT_ADMIN แล้ว", ephemeral=True)
+        await interaction.response.send_message("⏳ อัปเดต WAIT_ADMIN แล้ว", ephemeral=True)
 
     # =====================
     # 👨‍💼 ADMIN ACCEPT
     # =====================
     @discord.ui.button(label="👨‍💼 แอดมินรับออเดอร์แล้ว", style=discord.ButtonStyle.blurple)
     async def admin_accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+
         try:
             self.bot.mem.update_order_status(self.order_id, "ADMIN_ACCEPTED")
-        except:
-            pass
+        except Exception as e:
+            print(e)
 
         await interaction.response.send_message("👨‍💼 อัปเดตแล้ว", ephemeral=True)
 
@@ -36,10 +38,11 @@ class StatusView(discord.ui.View):
     # =====================
     @discord.ui.button(label="🪏 กำลังฟาร์ม", style=discord.ButtonStyle.green)
     async def farming(self, interaction: discord.Interaction, button: discord.ui.Button):
+
         try:
             self.bot.mem.update_order_status(self.order_id, "FARMING")
-        except:
-            pass
+        except Exception as e:
+            print(e)
 
         await interaction.response.send_message("🪏 อัปเดตแล้ว", ephemeral=True)
 
@@ -48,35 +51,41 @@ class StatusView(discord.ui.View):
     # =====================
     @discord.ui.button(label="📦 รอลูกค้ามารับของ", style=discord.ButtonStyle.gray)
     async def waiting_customer(self, interaction: discord.Interaction, button: discord.ui.Button):
+
         try:
             self.bot.mem.update_order_status(self.order_id, "WAIT_CUSTOMER")
-        except:
-            pass
+        except Exception as e:
+            print(e)
 
         await interaction.response.send_message("📦 อัปเดตแล้ว", ephemeral=True)
 
     # =====================
-    # ✅ COMPLETE ORDER (สำคัญสุด)
+    # ✅ DONE (CORE FLOW)
     # =====================
     @discord.ui.button(label="✅ ส่งของเสร็จแล้ว", style=discord.ButtonStyle.green)
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        # 🔒 กันกดซ้ำ
+        # 🔒 กันกดซ้ำ (ปลอดภัยขึ้น)
         try:
             data = self.bot.mem.get_order(self.order_id)
-            if data and data[2] == "DONE":
-                await interaction.response.send_message("❗ ออเดอร์นี้จบไปแล้ว", ephemeral=True)
+            if not data:
+                await interaction.response.send_message("❌ ไม่พบออเดอร์", ephemeral=True)
                 return
-        except:
-            pass
+
+            if data[4] == "DONE":
+                await interaction.response.send_message("❗ ออเดอร์นี้จบแล้ว", ephemeral=True)
+                return
+        except Exception as e:
+            print(e)
 
         await interaction.response.send_message("🔄 กำลังจบออเดอร์...", ephemeral=True)
 
-        # 🚀 เรียกระบบ complete
+        # 🚀 เรียกระบบหลัก (order system)
         try:
             await self.bot.order.complete(interaction.channel)
-        except:
+        except Exception as e:
+            print(e)
             try:
-                await interaction.channel.send("❌ เกิดข้อผิดพลาดตอนจบออเดอร์")
+                await interaction.channel.send("❌ error ตอน complete order")
             except:
                 pass
