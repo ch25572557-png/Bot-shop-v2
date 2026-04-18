@@ -9,7 +9,7 @@ class OrderSystem:
         self.notify = notify
         self.backup = backup
         self.brain = brain
-        self.bot = bot  # 🔥 FIX: ใช้ส่งไปแอดมิน
+        self.bot = bot
 
         self.last_alert = {}
         self._lock = asyncio.Lock()
@@ -18,7 +18,7 @@ class OrderSystem:
         self._started = False
 
     # =====================
-    # 🚀 START (เรียกจาก bot.py เท่านั้น)
+    # 🚀 START WORKER
     # =====================
     async def start(self):
         if self._started:
@@ -29,7 +29,7 @@ class OrderSystem:
         print("🧠 FARM WORKER STARTED")
 
     # =====================
-    # 🛒 CREATE ORDER (FIX: ส่งเข้า ADMIN CHANNEL)
+    # 🛒 CREATE ORDER
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
@@ -50,13 +50,15 @@ class OrderSystem:
             return False
 
         # =====================
-        # 📢 SEND TO ADMIN CHANNEL (FIX หลัก)
+        # 📢 SEND TO ADMIN CHANNEL (FIX)
         # =====================
         try:
             ch_id = self.brain.get("CHANNELS.ORDER_NOTIFY")
 
             if ch_id:
-                ch = self.bot.get_channel(int(ch_id)) or await self.bot.fetch_channel(int(ch_id))
+                ch = self.bot.get_channel(int(ch_id))
+                if not ch:
+                    ch = await self.bot.fetch_channel(int(ch_id))
 
                 if ch:
                     await ch.send(
@@ -75,6 +77,9 @@ class OrderSystem:
         except:
             pass
 
+        # =====================
+        # BACKUP
+        # =====================
         try:
             await self.backup.log(
                 f"ORDER #{order_id} | {user} | {item} x{amount}"
@@ -82,6 +87,9 @@ class OrderSystem:
         except:
             pass
 
+        # =====================
+        # TICKET CREATE
+        # =====================
         try:
             await self.ticket.create(guild, user, order_id)
         except:
@@ -90,7 +98,7 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # 🧠 FARM WORKER (UNCHANGED BUT SAFE)
+    # 🧠 FARM WORKER
     # =====================
     async def farm_worker(self):
 
@@ -98,7 +106,7 @@ class OrderSystem:
             try:
                 task = await self.farm_queue.get()
 
-                item = task.get("item")
+                item = task["item"]
                 amount = task.get("amount", 1)
 
                 await asyncio.sleep(3)
@@ -115,7 +123,33 @@ class OrderSystem:
                 await asyncio.sleep(2)
 
     # =====================
-    # COMPLETE (UNCHANGED LOGIC)
+    # 🔥 STOCK ALERT (เพิ่มให้ครบ)
+    # =====================
+    async def stock_alert(self, item, guild):
+
+        try:
+            low = int(self.brain.get("SETTINGS.LOW_STOCK") or 5)
+        except:
+            low = 5
+
+        qty = self.mem.get_stock(item)
+
+        if qty > low:
+            return
+
+        try:
+            ch_id = self.brain.get("CHANNELS.STOCK_ALERT_CHANNEL")
+            if not ch_id:
+                return
+
+            ch = self.bot.get_channel(int(ch_id))
+            if ch:
+                await ch.send(f"⚠️ STOCK LOW\n📦 {item}\n📉 เหลือ {qty}")
+        except:
+            pass
+
+    # =====================
+    # ✅ COMPLETE ORDER
     # =====================
     async def complete(self, channel):
 
