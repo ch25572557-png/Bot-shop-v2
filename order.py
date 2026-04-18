@@ -9,7 +9,7 @@ class OrderSystem:
         self.backup = backup
         self.brain = brain
 
-        # 🟡 cooldown storage
+        # 🟡 cooldown storage (stock alert)
         self.last_alert = {}
 
     # =====================
@@ -32,30 +32,45 @@ class OrderSystem:
             "WAIT"
         )
 
+        if not order_id:
+            return False
+
+        # 📢 notify admin
         try:
             await self.notify.admin(user, item, order_id)
-        except:
-            pass
+        except Exception as e:
+            print("[ORDER] notify error:", e)
 
+        # 💾 backup
         try:
             await self.backup.log(
-                f"ORDER #{order_id} | {user} | {item} x{amount} | {roblox_user}"
+                f"ORDER #{order_id} | {user} | {item} x{amount}"
             )
-        except:
-            pass
+        except Exception as e:
+            print("[ORDER] backup error:", e)
 
+        # 🎫 ticket
         try:
             await self.ticket.create(guild, user, order_id)
+        except Exception as e:
+            print("[ORDER] ticket error:", e)
+
+        return order_id
+
+    # =====================
+    # 🔥 STOCK ALERT SYSTEM (C CORE)
+    # =====================
+    async def stock_alert(self, item, guild):
+
+        try:
+            LOW_STOCK = int(self.brain.get("SETTINGS.LOW_STOCK") or 5)
         except:
-            pass
+            LOW_STOCK = 5
 
-    # =====================
-    # 🔥 STOCK ALERT SYSTEM
-    # =====================
-    async def stock_alert(self, item, channel):
-
-        LOW_STOCK = int(self.brain.get("SETTINGS.LOW_STOCK") or 5)
-        COOLDOWN = int(self.brain.get("SETTINGS.COOLDOWN") or 3)
+        try:
+            COOLDOWN = int(self.brain.get("SETTINGS.COOLDOWN") or 3)
+        except:
+            COOLDOWN = 3
 
         qty = self.mem.get_stock(item)
 
@@ -64,7 +79,7 @@ class OrderSystem:
 
         now = time.time()
 
-        # ⏳ cooldown กัน spam
+        # ⏳ anti spam per item
         if item in self.last_alert:
             if now - self.last_alert[item] < COOLDOWN * 60:
                 return
@@ -72,16 +87,16 @@ class OrderSystem:
         self.last_alert[item] = now
 
         try:
-            admin_ch = channel.guild.get_channel(
-                int(self.brain.get("CHANNELS.ADMIN"))
-            )
+            admin_id = self.brain.get("CHANNELS.ADMIN")
+            admin_ch = guild.get_channel(int(admin_id))
 
             if admin_ch:
                 await admin_ch.send(
                     f"⚠️ STOCK ALERT\n📦 {item}\n📉 เหลือ {qty}"
                 )
-        except:
-            pass
+
+        except Exception as e:
+            print("[ORDER] stock alert error:", e)
 
     # =====================
     # ✅ COMPLETE ORDER
@@ -103,11 +118,12 @@ class OrderSystem:
             amount = 1
             roblox_user = None
 
+        # 🔒 lock prevent double complete
         if status == "DONE":
             return False
 
         # =====================
-        # 📦 MINUS STOCK (ก่อน DONE)
+        # 📦 STOCK (must pass first)
         # =====================
         success = self.mem.minus_stock(item, amount)
 
@@ -133,42 +149,42 @@ class OrderSystem:
 
         try:
             self.mem.add_points(user, point)
-        except:
-            pass
+        except Exception as e:
+            print("[ORDER] points error:", e)
 
         # =====================
         # 🔥 STOCK ALERT CHECK
         # =====================
-        await self.stock_alert(item, channel)
+        try:
+            await self.stock_alert(item, channel.guild)
+        except Exception as e:
+            print("[ORDER] alert error:", e)
 
         # =====================
         # 💾 BACKUP
         # =====================
         try:
             await self.backup.log(
-                f"COMPLETE #{order_id} | {user} | {item} x{amount} | {roblox_user}"
+                f"COMPLETE #{order_id} | {user} | {item} x{amount}"
             )
-        except:
-            pass
+        except Exception as e:
+            print("[ORDER] backup error:", e)
 
         # =====================
         # 📢 MESSAGE
         # =====================
         try:
-            msg = (
-                f"✅ ออเดอร์เสร็จแล้ว\n"
-                f"📦 {item} x{amount}\n"
-                f"💰 +{point} points\n"
-            )
+            msg = f"✅ ออเดอร์เสร็จแล้ว\n📦 {item} x{amount}\n💰 +{point} points"
 
             if roblox_user:
-                msg += f"🎮 Roblox: {roblox_user}\n"
+                msg += f"\n🎮 Roblox: {roblox_user}"
 
-            msg += "⏳ ห้องจะปิดใน 10 วินาที..."
+            msg += "\n⏳ ห้องจะปิดใน 10 วินาที..."
 
             await channel.send(msg)
-        except:
-            pass
+
+        except Exception as e:
+            print("[ORDER] message error:", e)
 
         # =====================
         # ⏱ CLOSE
@@ -177,7 +193,7 @@ class OrderSystem:
 
         try:
             await channel.delete()
-        except:
-            pass
+        except Exception as e:
+            print("[ORDER] delete channel error:", e)
 
         return True
