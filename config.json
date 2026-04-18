@@ -12,7 +12,9 @@
 
     "LOW_STOCK": 5,
 
-    "ORDER_COOLDOWN_MIN": 3,
+    "COOLDOWN": 3,
+
+    "ALLOW_FARM_IF_NO_STOCK": false,
 
     "AUTO_ALERT": true,
 
