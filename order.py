@@ -12,6 +12,9 @@ class OrderSystem:
         # 🟡 cooldown storage (stock alert)
         self.last_alert = {}
 
+        # 🔒 lock กัน stock race condition (สำคัญมาก)
+        self._lock = asyncio.Lock()
+
     # =====================
     # 🛒 CREATE ORDER
     # =====================
@@ -32,7 +35,8 @@ class OrderSystem:
             "WAIT"
         )
 
-        if not order_id:
+        # 🔒 FIX: None safe
+        if order_id is None:
             return False
 
         # 📢 notify admin
@@ -58,18 +62,15 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # 🔥 STOCK ALERT SYSTEM (C CORE)
+    # 🔥 STOCK ALERT SYSTEM (FIXED)
     # =====================
     async def stock_alert(self, item, guild):
 
         try:
             LOW_STOCK = int(self.brain.get("SETTINGS.LOW_STOCK") or 5)
-        except:
-            LOW_STOCK = 5
-
-        try:
             COOLDOWN = int(self.brain.get("SETTINGS.COOLDOWN") or 3)
         except:
+            LOW_STOCK = 5
             COOLDOWN = 3
 
         qty = self.mem.get_stock(item)
@@ -79,12 +80,14 @@ class OrderSystem:
 
         now = time.time()
 
-        # ⏳ anti spam per item
-        if item in self.last_alert:
-            if now - self.last_alert[item] < COOLDOWN * 60:
+        # 🔥 FIX: guild-level key กัน spam ข้าม server
+        key = f"{guild.id}:{item}"
+
+        if key in self.last_alert:
+            if now - self.last_alert[key] < COOLDOWN * 60:
                 return
 
-        self.last_alert[item] = now
+        self.last_alert[key] = now
 
         try:
             admin_id = self.brain.get("CHANNELS.ADMIN")
@@ -99,7 +102,7 @@ class OrderSystem:
             print("[ORDER] stock alert error:", e)
 
     # =====================
-    # ✅ COMPLETE ORDER
+    # ✅ COMPLETE ORDER (FIXED CORE FLOW)
     # =====================
     async def complete(self, channel):
 
@@ -111,21 +114,22 @@ class OrderSystem:
         if not data:
             return False
 
+        # 🔥 FIX: safe unpack (กัน DB พัง)
         try:
-            user, item, amount, roblox_user, status = data
+            data = list(data) + [None] * (5 - len(data))
+            user, item, amount, roblox_user, status = data[:5]
         except:
-            user, item, status = data
-            amount = 1
-            roblox_user = None
+            return False
 
-        # 🔒 lock prevent double complete
+        # 🔒 กัน double complete
         if status == "DONE":
             return False
 
         # =====================
-        # 📦 STOCK (must pass first)
+        # 📦 STOCK (LOCKED → FIX RACE CONDITION)
         # =====================
-        success = self.mem.minus_stock(item, amount)
+        async with self._lock:
+            success = self.mem.minus_stock(item, amount)
 
         if not success:
             try:
