@@ -56,42 +56,38 @@ class StockSelect(discord.ui.Select):
         except:
             items = []
 
-        options = []
+        options = [
+            discord.SelectOption(label=i[0], value=i[0])
+            for i in items[:25]
+        ]
 
-        for i in items[:25]:
-            options.append(
-                discord.SelectOption(
-                    label=i[0],
-                    value=i[0]
-                )
-            )
-
-        # กัน dropdown ว่าง
+        # ❗ กันไม่มีของ
         if not options:
-            options.append(
+            options = [
                 discord.SelectOption(
                     label="ไม่มีสินค้าในสต๊อก",
                     value="none"
                 )
-            )
+            ]
 
         super().__init__(
             placeholder="📦 เลือกสินค้าที่ต้องการเติม",
-            options=options,
-            disabled=not bool(items)
+            options=options
         )
 
     async def callback(self, interaction: discord.Interaction):
 
-        if self.values[0] == "none":
+        value = self.values[0]
+
+        if value == "none":
             return await interaction.response.send_message(
-                "❌ ไม่มีสินค้าให้เลือก",
+                "❌ ไม่มีสินค้าในสต๊อก",
                 ephemeral=True
             )
 
         try:
             await interaction.response.send_modal(
-                RestockModal(self.bot, self.values[0])
+                RestockModal(self.bot, value)
             )
 
         except Exception as e:
@@ -108,6 +104,4 @@ class StockView(discord.ui.View):
 
     def __init__(self, bot):
         super().__init__(timeout=None)
-        self.bot = bot
-
         self.add_item(StockSelect(bot))
