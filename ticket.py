@@ -7,23 +7,22 @@ class TicketSystem:
         self.bot = bot
 
     # =====================
-    # 📢 SEND TO ADMIN CHANNEL (FIX 100%)
+    # 📢 ADMIN SEND (CLEAN FIX)
     # =====================
     async def send_to_admin(self, guild, message: str):
         try:
-            ch_id = (
-                self.brain.get("ORDER_NOTIFY")
-                or self.brain.get("CHANNELS.ORDER_NOTIFY")
-                or self.brain.get("CHANNELS.ORDER_NOTIFY_ID")
-            )
+            ch_id = self.brain.get("CHANNELS.ORDER_NOTIFY")
 
             if not ch_id:
                 return
 
-            channel = self.bot.get_channel(int(ch_id))
-
-            if channel is None:
-                channel = await self.bot.fetch_channel(int(ch_id))
+            try:
+                channel = self.bot.get_channel(int(ch_id))
+                if channel is None:
+                    channel = await self.bot.fetch_channel(int(ch_id))
+            except Exception as e:
+                print("[ADMIN FETCH ERROR]", e)
+                return
 
             if channel:
                 await channel.send(message)
@@ -36,26 +35,20 @@ class TicketSystem:
     # =====================
     async def create(self, guild, user, order_id):
 
-        # =====================
-        # 📁 CATEGORY RESOLVE
-        # =====================
         category = None
 
         try:
             category_id = self.brain.get("CHANNELS.TICKET_CATEGORY")
 
             if category_id:
-                category_id = int(category_id)
-
-                ch = guild.get_channel(category_id)
+                ch = guild.get_channel(int(category_id))
 
                 if isinstance(ch, discord.CategoryChannel):
                     category = ch
                 else:
-                    category = await guild.fetch_channel(category_id)
-
-                    if not isinstance(category, discord.CategoryChannel):
-                        category = None
+                    ch = await guild.fetch_channel(int(category_id))
+                    if isinstance(ch, discord.CategoryChannel):
+                        category = ch
 
         except Exception as e:
             print("[TICKET] category error:", e)
@@ -87,15 +80,15 @@ class TicketSystem:
             return None
 
         # =====================
-        # 💾 SAVE TICKET
+        # 💾 SAVE
         # =====================
         try:
             self.bot.mem.save_ticket(order_id, str(channel.id))
-        except Exception as e:
-            print("[TICKET] save error:", e)
+        except:
+            pass
 
         # =====================
-        # 📦 ORDER DATA
+        # 📦 ORDER LOAD
         # =====================
         item = "Unknown"
         amount = 1
@@ -103,16 +96,14 @@ class TicketSystem:
 
         try:
             data = self.bot.mem.get_order(order_id)
-
             if data:
                 data = list(data) + [None]*5
-                user_db, item, amount, roblox_user, status = data[:5]
-
+                _, item, amount, roblox_user, _ = data[:5]
         except Exception as e:
             print("[TICKET] order load error:", e)
 
         # =====================
-        # 📢 SEND TO ADMIN (FIXED)
+        # 📢 ADMIN NOTIFY (FIXED)
         # =====================
         try:
             await self.send_to_admin(
@@ -125,7 +116,7 @@ class TicketSystem:
             pass
 
         # =====================
-        # 📢 TICKET MESSAGE (ลูกค้า)
+        # 📢 TICKET MESSAGE
         # =====================
         try:
             msg = (
