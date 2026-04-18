@@ -4,16 +4,24 @@ class NotifySystem:
         self.bot = bot
 
     # =====================
+    # 🔧 INTERNAL SAFE CHANNEL GETTER
+    # =====================
+    def _get_admin_channel(self):
+        try:
+            ch_id = self.brain.get("CHANNELS.ADMIN")
+            if not ch_id:
+                return None
+
+            return self.bot.get_channel(int(ch_id))
+        except:
+            return None
+
+    # =====================
     # 🔔 ADMIN NOTIFY (NEW ORDER)
     # =====================
     async def admin(self, user, item, order_id=None):
 
-        try:
-            ch_id = int(self.brain.get("CHANNELS.ADMIN"))
-            ch = self.bot.get_channel(ch_id)
-        except:
-            ch = None
-
+        ch = self._get_admin_channel()
         if not ch:
             return
 
@@ -29,7 +37,7 @@ class NotifySystem:
             if order_id:
                 msg += f"\n🆔 Order ID: {order_id}"
 
-            # 🟡 safe ping role
+            # 🔥 safe role ping
             if admin_role:
                 msg = f"<@&{admin_role}>\n" + msg
 
@@ -43,12 +51,7 @@ class NotifySystem:
     # =====================
     async def complete(self, user, item, order_id=None):
 
-        try:
-            ch_id = int(self.brain.get("CHANNELS.ADMIN"))
-            ch = self.bot.get_channel(ch_id)
-        except:
-            ch = None
-
+        ch = self._get_admin_channel()
         if not ch:
             return
 
@@ -68,16 +71,11 @@ class NotifySystem:
             print("[NOTIFY] complete error:", e)
 
     # =====================
-    # ⚠️ STOCK ALERT (C CORE)
+    # ⚠️ STOCK ALERT (FINAL SAFE VERSION)
     # =====================
     async def stock_alert(self, item, qty):
 
-        try:
-            ch_id = int(self.brain.get("CHANNELS.ADMIN"))
-            ch = self.bot.get_channel(ch_id)
-        except:
-            ch = None
-
+        ch = self._get_admin_channel()
         if not ch:
             return
 
