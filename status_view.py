@@ -1,5 +1,4 @@
 import discord
-import asyncio
 
 class StatusView(discord.ui.View):
 
@@ -8,18 +7,13 @@ class StatusView(discord.ui.View):
         self.bot = bot
         self.order_id = order_id
 
-        # 🔥 กันกดซ้อนแบบปลอดภัยจริง
-        self._lock = asyncio.Lock()
-
     # =====================
-    # 🔐 ADMIN CHECK (ROBUST FIXED)
+    # 🔐 ADMIN CHECK
     # =====================
     def is_admin(self, interaction: discord.Interaction):
-
         try:
             role_id = self.bot.brain.get("ROLES.ADMIN_ROLE")
 
-            # fallback: ถ้าไม่มี role ใช้ permission แทน
             if not role_id:
                 return interaction.user.guild_permissions.administrator
 
@@ -29,22 +23,31 @@ class StatusView(discord.ui.View):
                 interaction.user.guild_permissions.administrator
                 or any(r.id == role_id for r in interaction.user.roles)
             )
-
         except:
             return interaction.user.guild_permissions.administrator
 
     # =====================
-    # ⛔ GLOBAL BLOCK
+    # 📢 SEND TO TICKET (🔥 FIX CORE)
+    # =====================
+    async def send_ticket(self, interaction, status):
+        try:
+            msg = f"📊 STATUS UPDATE\n🎫 Order #{self.order_id}\n🔄 {status}"
+
+            await interaction.channel.send(msg)
+
+        except Exception as e:
+            print("[TICKET STATUS ERROR]", e)
+
+    # =====================
+    # ⛔ BLOCK NON ADMIN
     # =====================
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-
         if not self.is_admin(interaction):
             await interaction.response.send_message(
                 "❌ เฉพาะแอดมินเท่านั้น",
                 ephemeral=True
             )
             return False
-
         return True
 
     # =====================
@@ -54,6 +57,8 @@ class StatusView(discord.ui.View):
     async def wait_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         self.bot.mem.update_order_status(self.order_id, "WAIT_ADMIN")
+        await self.send_ticket(interaction, "WAIT_ADMIN")
+
         await interaction.response.send_message("⏳ WAIT_ADMIN", ephemeral=True)
 
     # =====================
@@ -63,6 +68,8 @@ class StatusView(discord.ui.View):
     async def admin_accept(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         self.bot.mem.update_order_status(self.order_id, "ADMIN_ACCEPTED")
+        await self.send_ticket(interaction, "ADMIN_ACCEPTED")
+
         await interaction.response.send_message("👨‍💼 ADMIN_ACCEPTED", ephemeral=True)
 
     # =====================
@@ -72,6 +79,8 @@ class StatusView(discord.ui.View):
     async def farming(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         self.bot.mem.update_order_status(self.order_id, "FARMING")
+        await self.send_ticket(interaction, "FARMING")
+
         await interaction.response.send_message("🪏 FARMING", ephemeral=True)
 
     # =====================
@@ -81,10 +90,12 @@ class StatusView(discord.ui.View):
     async def waiting_customer(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         self.bot.mem.update_order_status(self.order_id, "WAIT_CUSTOMER")
+        await self.send_ticket(interaction, "WAIT_CUSTOMER")
+
         await interaction.response.send_message("📦 WAIT_CUSTOMER", ephemeral=True)
 
     # =====================
-    # ✅ DONE (FULL SAFE FIX)
+    # ✅ DONE (FIX + CLOSE HANDLER)
     # =====================
     @discord.ui.button(label="✅ ส่งของเสร็จแล้ว", style=discord.ButtonStyle.red)
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -95,18 +106,17 @@ class StatusView(discord.ui.View):
                 ephemeral=True
             )
 
-        # 🔥 กันกดซ้อนระดับ production
-        async with self._lock:
+        try:
+            await interaction.response.send_message(
+                "🔄 กำลังจบออเดอร์...",
+                ephemeral=True
+            )
+        except:
+            pass
 
-            try:
-                await interaction.response.send_message(
-                    "🔄 กำลังจบออเดอร์...",
-                    ephemeral=True
-                )
-            except:
-                pass
+        try:
+            # เรียกระบบ complete (จะเป็นคนปิดห้อง)
+            await self.bot.order.complete(interaction.channel)
 
-            try:
-                await self.bot.order.complete(interaction.channel)
-            except Exception as e:
-                print("[STATUS] complete error:", e)
+        except Exception as e:
+            print("[STATUS COMPLETE ERROR]", e)
