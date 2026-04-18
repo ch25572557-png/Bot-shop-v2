@@ -14,11 +14,10 @@ class OrderSystem:
         self.farm_queue = asyncio.Queue()
         self._started = False
 
-        # 🔥 กันกดซ้ำ
         self.processing = set()
 
     # =====================
-    # 🚀 START (ต้องเรียกจาก bot.py)
+    # 🚀 START
     # =====================
     async def start(self):
         if self._started:
@@ -27,7 +26,7 @@ class OrderSystem:
         asyncio.create_task(self.farm_worker())
 
     # =====================
-    # 📢 ADMIN SEND (FIXED)
+    # 📢 ADMIN SEND
     # =====================
     async def send_admin(self, msg):
         try:
@@ -39,8 +38,8 @@ class OrderSystem:
             if channel:
                 await channel.send(msg)
 
-        except Exception as e:
-            print("[ADMIN SEND ERROR]", e)
+        except:
+            pass
 
     # =====================
     # 🛒 CREATE ORDER
@@ -69,14 +68,26 @@ class OrderSystem:
             f"📦 {item} x{amount}"
         )
 
-        await self.notify.admin(user, item, order_id)
-        await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
-        await self.ticket.create(guild, user, order_id)
+        # 🔥 SAFE ALL SERVICES
+        try:
+            await self.notify.admin(user, item, order_id)
+        except:
+            pass
+
+        try:
+            await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
+        except:
+            pass
+
+        try:
+            await self.ticket.create(guild, user, order_id)
+        except:
+            pass
 
         return order_id
 
     # =====================
-    # ✅ COMPLETE (FIXED SAFE LOCK)
+    # ✅ COMPLETE
     # =====================
     async def complete(self, channel):
 
@@ -84,7 +95,6 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # 🔥 กันกดซ้ำ
         if order_id in self.processing:
             return False
 
@@ -103,15 +113,33 @@ class OrderSystem:
             async with self._lock:
                 success = self.mem.minus_stock(item, amount)
 
+            # =====================
+            # 🔥 FARM FIX (ADDED)
+            # =====================
             if not success:
-                await channel.send("❌ สต๊อกไม่พอ")
-                return False
+
+                allow_farm = bool(self.brain.get("SETTINGS.ALLOW_FARM_IF_NO_STOCK", False))
+
+                if allow_farm:
+                    await self.farm_queue.put({
+                        "item": item,
+                        "amount": amount,
+                        "order_id": order_id
+                    })
+                    await channel.send("⚠️ เข้าคิวฟาร์มแล้ว")
+                    return False
+                else:
+                    await channel.send("❌ สต๊อกไม่พอ")
+                    return False
 
             self.mem.update_order_status(order_id, "DONE")
 
             point = int(self.brain.get("SETTINGS.POINT_PER_ORDER") or 0)
 
-            self.mem.add_points(user, point)
+            try:
+                self.mem.add_points(user, point)
+            except:
+                pass
 
             await self.send_admin(
                 f"✅ COMPLETE #{order_id}\n📦 {item} x{amount}"
@@ -143,6 +171,5 @@ class OrderSystem:
                 )
                 self.mem.conn.commit()
 
-            except Exception as e:
-                print("[FARM ERROR]", e)
+            except:
                 await asyncio.sleep(2)
