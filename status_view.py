@@ -16,9 +16,9 @@ class StatusView(discord.ui.View):
         try:
             self.bot.mem.update_order_status(self.order_id, "WAIT_ADMIN")
         except Exception as e:
-            print(e)
+            print("[STATUS] wait_admin:", e)
 
-        await interaction.response.send_message("⏳ อัปเดต WAIT_ADMIN แล้ว", ephemeral=True)
+        await interaction.response.send_message("⏳ WAIT_ADMIN", ephemeral=True)
 
     # =====================
     # 👨‍💼 ADMIN ACCEPT
@@ -29,9 +29,9 @@ class StatusView(discord.ui.View):
         try:
             self.bot.mem.update_order_status(self.order_id, "ADMIN_ACCEPTED")
         except Exception as e:
-            print(e)
+            print("[STATUS] admin_accept:", e)
 
-        await interaction.response.send_message("👨‍💼 อัปเดตแล้ว", ephemeral=True)
+        await interaction.response.send_message("👨‍💼 ADMIN_ACCEPTED", ephemeral=True)
 
     # =====================
     # 🪏 FARMING
@@ -42,9 +42,9 @@ class StatusView(discord.ui.View):
         try:
             self.bot.mem.update_order_status(self.order_id, "FARMING")
         except Exception as e:
-            print(e)
+            print("[STATUS] farming:", e)
 
-        await interaction.response.send_message("🪏 อัปเดตแล้ว", ephemeral=True)
+        await interaction.response.send_message("🪏 FARMING", ephemeral=True)
 
     # =====================
     # 📦 WAIT CUSTOMER
@@ -55,36 +55,44 @@ class StatusView(discord.ui.View):
         try:
             self.bot.mem.update_order_status(self.order_id, "WAIT_CUSTOMER")
         except Exception as e:
-            print(e)
+            print("[STATUS] wait_customer:", e)
 
-        await interaction.response.send_message("📦 อัปเดตแล้ว", ephemeral=True)
+        await interaction.response.send_message("📦 WAIT_CUSTOMER", ephemeral=True)
 
     # =====================
-    # ✅ DONE (CORE FLOW)
+    # ✅ DONE (CORE SAFE FLOW)
     # =====================
     @discord.ui.button(label="✅ ส่งของเสร็จแล้ว", style=discord.ButtonStyle.green)
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        # 🔒 กันกดซ้ำ (ปลอดภัยขึ้น)
+        # 🔒 โหลด order แบบ safe
         try:
             data = self.bot.mem.get_order(self.order_id)
             if not data:
                 await interaction.response.send_message("❌ ไม่พบออเดอร์", ephemeral=True)
                 return
-
-            if data[4] == "DONE":
-                await interaction.response.send_message("❗ ออเดอร์นี้จบแล้ว", ephemeral=True)
-                return
         except Exception as e:
-            print(e)
+            print("[STATUS] get_order error:", e)
+            return
+
+        # 🔍 check status (รองรับโครงเก่า + ใหม่)
+        try:
+            status = data[4]
+        except:
+            status = data[2]
+
+        # ❗ กันกดซ้ำ / กัน conflict กับ ORDER LOCK
+        if status in ["DONE", "LOCKED"]:
+            await interaction.response.send_message("❗ ออเดอร์นี้เสร็จแล้ว", ephemeral=True)
+            return
 
         await interaction.response.send_message("🔄 กำลังจบออเดอร์...", ephemeral=True)
 
-        # 🚀 เรียกระบบหลัก (order system)
+        # 🚀 call main system
         try:
             await self.bot.order.complete(interaction.channel)
         except Exception as e:
-            print(e)
+            print("[STATUS] complete error:", e)
             try:
                 await interaction.channel.send("❌ error ตอน complete order")
             except:
