@@ -14,7 +14,7 @@ from backup import BackupSystem
 from shop import ShopView
 from admin import AdminView
 
-# 🆕 SYSTEMS
+# 🆕 SYSTEM VIEWS
 from cancel_view import CancelView
 from admin_dashboard import AdminDashboard
 from stock_view import StockView
@@ -65,19 +65,21 @@ async def on_ready():
 
 
     # =====================
-    # 🎛 REGISTER VIEWS
+    # 🎛 REGISTER VIEWS (SAFE DEBUG VERSION)
     # =====================
-    try:
-        bot.add_view(ShopView(bot))
-        bot.add_view(AdminView(bot))
-        bot.add_view(CancelView(bot))
-        bot.add_view(StockView(bot))
-        bot.add_view(AdminDashboard(bot))
 
-        print("✅ ALL VIEWS REGISTERED")
+    def safe_add(view, name):
+        try:
+            bot.add_view(view(bot))
+            print(f"✅ {name} OK")
+        except Exception as e:
+            print(f"❌ {name} FAIL:", e)
 
-    except Exception as e:
-        print("[VIEW REGISTER ERROR]", e)
+    safe_add(ShopView, "ShopView")
+    safe_add(AdminView, "AdminView")
+    safe_add(CancelView, "CancelView")
+    safe_add(StockView, "StockView")
+    safe_add(AdminDashboard, "AdminDashboard")
 
 
     # =====================
