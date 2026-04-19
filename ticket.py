@@ -9,12 +9,12 @@ class TicketSystem:
         self.bot = bot
 
     # =====================
-    # 📢 ADMIN SEND (SAFE)
+    # 📢 ADMIN SEND
     # =====================
     async def send_to_admin(self, guild, title, desc):
 
         try:
-            ch_id = self.brain.channel("ORDER_NOTIFY")  # 🔥 FIX
+            ch_id = self.brain.channel("ORDER_NOTIFY")
             if not ch_id:
                 return
 
@@ -32,26 +32,23 @@ class TicketSystem:
             print("[ADMIN SEND ERROR]", e)
 
     # =====================
-    # 🎫 CREATE TICKET
+    # 🎫 CREATE TICKET (V2 FIXED)
     # =====================
     async def create(self, guild, user, order_id):
 
         category = None
 
         # =====================
-        # 📁 CATEGORY SAFE
+        # 📁 CATEGORY
         # =====================
         try:
-            category_id = self.brain.channel("TICKET_CATEGORY")  # 🔥 FIX
+            category_id = self.brain.channel("TICKET_CATEGORY")
 
             if category_id:
-                ch = guild.get_channel(category_id)
+                ch = guild.get_channel(category_id) or await guild.fetch_channel(category_id)
                 if isinstance(ch, discord.CategoryChannel):
                     category = ch
-                else:
-                    ch = await guild.fetch_channel(category_id)
-                    if isinstance(ch, discord.CategoryChannel):
-                        category = ch
+
         except:
             category = None
 
@@ -59,28 +56,25 @@ class TicketSystem:
         # 👑 ADMIN ROLE
         # =====================
         admin_role = None
+
         try:
-            role_id = self.brain.role("ADMIN_ROLE")  # 🔥 FIX
+            role_id = self.brain.role("ADMIN_ROLE")
             if role_id:
                 admin_role = guild.get_role(role_id)
         except:
             admin_role = None
 
         # =====================
-        # 🔒 PERMISSION
+        # 🔒 PERMISSIONS
         # =====================
-        try:
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(view_channel=False),
-                user: discord.PermissionOverwrite(view_channel=True),
-                guild.me: discord.PermissionOverwrite(view_channel=True)
-            }
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            user: discord.PermissionOverwrite(view_channel=True),
+            guild.me: discord.PermissionOverwrite(view_channel=True)
+        }
 
-            if admin_role:
-                overwrites[admin_role] = discord.PermissionOverwrite(view_channel=True)
-
-        except:
-            return None
+        if admin_role:
+            overwrites[admin_role] = discord.PermissionOverwrite(view_channel=True)
 
         # =====================
         # 🧱 CREATE CHANNEL
@@ -96,29 +90,29 @@ class TicketSystem:
             return None
 
         # =====================
-        # 💾 SAVE
+        # 💾 SAVE (V2 async FIX)
         # =====================
         try:
-            self.bot.mem.save_ticket(order_id, str(channel.id))
+            await self.bot.mem.save_ticket(order_id, str(channel.id))
         except:
             pass
 
         # =====================
-        # 📦 ORDER DATA
+        # 📦 ORDER DATA (V2 FIX)
         # =====================
         item = "Unknown"
         amount = 1
         roblox_user = None
 
         try:
-            data = self.bot.mem.get_order(order_id)
+            data = await self.bot.mem.get_order(order_id)
             if data:
-                _, item, amount, roblox_user, _ = list(data)[:5]
+                _, item, amount, roblox_user, _ = data
         except:
             pass
 
         # =====================
-        # 📢 ADMIN
+        # 📢 ADMIN NOTIFY
         # =====================
         await self.send_to_admin(
             guild,
@@ -141,7 +135,6 @@ class TicketSystem:
         if roblox_user:
             embed.add_field(name="🎮 Roblox", value=roblox_user, inline=False)
 
-        # 🔥 FIX: สถานะเริ่มต้น
         embed.add_field(
             name="📊 Status",
             value="⏳ รอแอดมินรับออเดอร์",
@@ -153,7 +146,7 @@ class TicketSystem:
         # =====================
         await channel.send(
             embed=embed,
-            view=StatusView(self.bot, order_id)  # ต้องมี custom_id ในไฟล์นี้ด้วย
+            view=StatusView(self.bot, order_id)
         )
 
         return channel
