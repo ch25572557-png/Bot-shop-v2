@@ -18,6 +18,10 @@ from cancel_view import CancelView
 from admin_dashboard import AdminDashboard
 from stock_view import StockView
 
+# 🆕 SYSTEMS (missing before)
+from stock_alert import StockAlertSystem
+from dashboard_worker import DashboardWorker
+
 
 # =====================
 # 🔥 INTENTS
@@ -50,6 +54,10 @@ bot.order = OrderSystem(
     bot
 )
 
+# 🆕 NEW SYSTEMS
+bot.stock_alert = StockAlertSystem(bot)
+bot.dashboard = DashboardWorker(bot)
+
 
 # =====================
 # 🚀 READY EVENT
@@ -62,14 +70,13 @@ async def on_ready():
         return
     bot.ready_done = True
 
-
     # =====================
-    # 🎛 SAFE VIEW REGISTER (FIXED)
+    # 🎛 VIEWS
     # =====================
     def safe_add(view_cls, name):
         try:
             bot.add_view(view_cls(bot))
-            print(f"✅ {name} REGISTERED")
+            print(f"✅ {name}")
         except Exception as e:
             print(f"❌ {name} ERROR:", e)
 
@@ -81,29 +88,31 @@ async def on_ready():
 
 
     # =====================
-    # 📦 STOCK START
+    # 📦 START SYSTEMS (SAFE FIRE)
     # =====================
     try:
-        if hasattr(bot.stock, "start"):
-            result = bot.stock.start()
-            if hasattr(result, "__await__"):
-                await result
+        bot.stock.start()
         print("📦 STOCK STARTED")
     except Exception as e:
         print("[STOCK ERROR]", e)
 
-
-    # =====================
-    # 🛒 ORDER START
-    # =====================
     try:
-        if hasattr(bot.order, "start"):
-            result = bot.order.start()
-            if hasattr(result, "__await__"):
-                await result
+        bot.order.start()
         print("🛒 ORDER STARTED")
     except Exception as e:
         print("[ORDER ERROR]", e)
+
+    try:
+        bot.stock_alert.start()
+        print("🚨 STOCK ALERT STARTED")
+    except Exception as e:
+        print("[ALERT ERROR]", e)
+
+    try:
+        bot.dashboard.start()
+        print("📊 DASHBOARD STARTED")
+    except Exception as e:
+        print("[DASHBOARD ERROR]", e)
 
 
 # =====================
