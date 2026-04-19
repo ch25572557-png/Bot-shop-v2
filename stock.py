@@ -40,7 +40,7 @@ class StockSystem:
         return await self.mem.get_stock(item)
 
     # =====================
-    # 🚀 START LOOP
+    # 🚀 START LOOP (FIXED)
     # =====================
     def start(self):
 
@@ -48,7 +48,9 @@ class StockSystem:
             return
 
         self.running = True
-        self.bot.loop.create_task(self._loop())
+
+        # ✅ FIX: discord.py v2 ห้ามใช้ bot.loop ตรง ๆ
+        asyncio.create_task(self._loop())
 
         print("📦 STOCK MONITOR STARTED (V2 FIXED)")
 
@@ -67,12 +69,12 @@ class StockSystem:
                 await asyncio.sleep(5)
 
     # =====================
-    # 🔍 CHECK STOCK (🔥 FIX สำคัญ)
+    # 🔍 CHECK STOCK
     # =====================
     async def check_stock(self):
 
         try:
-            items = await self.mem.get_all_stock()  # 🔥 ใช้ Memory เท่านั้น
+            items = await self.mem.get_all_stock()
 
         except Exception as e:
             print("[STOCK FETCH ERROR]", e)
@@ -93,7 +95,9 @@ class StockSystem:
             if not channel_id:
                 return
 
-            channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
+            channel = self.bot.get_channel(channel_id)
+            if channel is None:
+                channel = await self.bot.fetch_channel(channel_id)
 
             if not channel:
                 return
