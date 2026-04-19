@@ -18,6 +18,8 @@ class TicketSystem:
             if not ch_id:
                 return
 
+            ch_id = int(ch_id)
+
             channel = self.bot.get_channel(ch_id) or await self.bot.fetch_channel(ch_id)
 
             if channel:
@@ -32,40 +34,42 @@ class TicketSystem:
             print("[ADMIN SEND ERROR]", e)
 
     # =====================
-    # 🎫 CREATE TICKET (V2 FIXED)
+    # 🎫 CREATE TICKET (FIXED)
     # =====================
-    async def create(self, guild, user, order_id):
+    async def create(self, guild, user, order_id, interaction=None):
 
         category = None
 
         # =====================
-        # 📁 CATEGORY
+        # 📁 CATEGORY FIX
         # =====================
         try:
             category_id = self.brain.channel("TICKET_CATEGORY")
 
             if category_id:
-                ch = guild.get_channel(category_id) or await guild.fetch_channel(category_id)
+                category_id = int(category_id)
+                ch = self.bot.get_channel(category_id) or await self.bot.fetch_channel(category_id)
+
                 if isinstance(ch, discord.CategoryChannel):
                     category = ch
 
-        except:
-            category = None
+        except Exception as e:
+            print("[CATEGORY ERROR]", e)
 
         # =====================
-        # 👑 ADMIN ROLE
+        # 👑 ADMIN ROLE FIX
         # =====================
         admin_role = None
 
         try:
             role_id = self.brain.role("ADMIN_ROLE")
             if role_id:
-                admin_role = guild.get_role(role_id)
+                admin_role = guild.get_role(int(role_id))
         except:
-            admin_role = None
+            pass
 
         # =====================
-        # 🔒 PERMISSIONS
+        # 🔒 PERMISSIONS FIX
         # =====================
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
@@ -77,7 +81,7 @@ class TicketSystem:
             overwrites[admin_role] = discord.PermissionOverwrite(view_channel=True)
 
         # =====================
-        # 🧱 CREATE CHANNEL
+        # 🧱 CREATE CHANNEL SAFE
         # =====================
         try:
             channel = await guild.create_text_channel(
@@ -87,10 +91,15 @@ class TicketSystem:
             )
         except Exception as e:
             print("[TICKET CREATE ERROR]", e)
+
+            # 🔥 FIX: ตอบ interaction กัน "ปุ่มเหมือนไม่ทำงาน"
+            if interaction:
+                await interaction.response.send_message("❌ สร้างทิกเก็ตไม่สำเร็จ", ephemeral=True)
+
             return None
 
         # =====================
-        # 💾 SAVE (V2 async FIX)
+        # 💾 SAVE
         # =====================
         try:
             await self.bot.mem.save_ticket(order_id, str(channel.id))
@@ -98,7 +107,7 @@ class TicketSystem:
             pass
 
         # =====================
-        # 📦 ORDER DATA (V2 FIX)
+        # 📦 ORDER DATA
         # =====================
         item = "Unknown"
         amount = 1
@@ -121,7 +130,7 @@ class TicketSystem:
         )
 
         # =====================
-        # 🎫 TICKET EMBED
+        # 🎫 EMBED
         # =====================
         embed = discord.Embed(
             title="🎫 ORDER TICKET",
@@ -142,7 +151,7 @@ class TicketSystem:
         )
 
         # =====================
-        # 🔘 STATUS VIEW
+        # 🔘 VIEW
         # =====================
         await channel.send(
             embed=embed,
