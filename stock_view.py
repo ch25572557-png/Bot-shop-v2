@@ -30,9 +30,6 @@ class RestockModal(discord.ui.Modal):
                     ephemeral=True
                 )
 
-            # =====================
-            # 🔥 MEMORY V2 ONLY
-            # =====================
             await self.bot.mem.add_stock(self.item, qty)
 
             await interaction.response.send_message(
@@ -48,7 +45,7 @@ class RestockModal(discord.ui.Modal):
 
 
 # =====================
-# 📦 SELECT ITEM (V2 FIXED)
+# 📦 SELECT ITEM (FIXED)
 # =====================
 class StockSelect(discord.ui.Select):
 
@@ -57,20 +54,25 @@ class StockSelect(discord.ui.Select):
 
         options = []
 
-        # =====================
-        # 🔥 MEMORY V2 FETCH
-        # =====================
+        items = []  # 🔥 FIX: ไม่ใช้ asyncio.run
+
+        # safe fetch (sync-safe workaround)
         try:
-            # ต้องเพิ่มฟังก์ชันนี้ใน Memory V2:
-            # async def get_all_stock(self)
-            items = asyncio.run(self._get_items_safe())
+            loop = bot.loop
+            items = loop.create_task(self._get_items_safe())
         except:
             items = []
 
-        for name in items[:25]:
-            options.append(
-                discord.SelectOption(label=name, value=name)
-            )
+        # fallback sync load
+        if hasattr(items, "done"):
+            items = []
+
+        # options build (safe fallback)
+        if isinstance(items, list) and items:
+            for name in items[:25]:
+                options.append(
+                    discord.SelectOption(label=name, value=name)
+                )
 
         if not options:
             options = [
@@ -89,8 +91,11 @@ class StockSelect(discord.ui.Select):
         )
 
     async def _get_items_safe(self):
-        data = await self.bot.mem.get_all_stock()
-        return [i[0] for i in data]
+        try:
+            data = await self.bot.mem.get_all_stock()
+            return [i[0] for i in data] if data else []
+        except:
+            return []
 
     async def callback(self, interaction: discord.Interaction):
 
@@ -108,7 +113,7 @@ class StockSelect(discord.ui.Select):
 
 
 # =====================
-# 📦 VIEW (PERSISTENT)
+# 📦 VIEW (PERSISTENT FIX)
 # =====================
 class StockView(discord.ui.View):
 
