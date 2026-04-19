@@ -4,9 +4,6 @@ import threading
 
 class Memory:
 
-    # =====================
-    # INIT DB
-    # =====================
     def __init__(self):
 
         self.conn = sqlite3.connect(
@@ -14,14 +11,14 @@ class Memory:
             check_same_thread=False
         )
 
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()
 
         with self.lock:
             self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.execute("PRAGMA synchronous=NORMAL")
 
         # =====================
-        # ORDERS
+        # TABLES
         # =====================
         self.conn.execute("""
         CREATE TABLE IF NOT EXISTS orders(
@@ -34,9 +31,6 @@ class Memory:
         )
         """)
 
-        # =====================
-        # STOCK
-        # =====================
         self.conn.execute("""
         CREATE TABLE IF NOT EXISTS stock(
             name TEXT PRIMARY KEY,
@@ -45,9 +39,6 @@ class Memory:
         )
         """)
 
-        # =====================
-        # POINTS
-        # =====================
         self.conn.execute("""
         CREATE TABLE IF NOT EXISTS points(
             user TEXT PRIMARY KEY,
@@ -55,9 +46,6 @@ class Memory:
         )
         """)
 
-        # =====================
-        # TICKETS
-        # =====================
         self.conn.execute("""
         CREATE TABLE IF NOT EXISTS tickets(
             order_id INTEGER PRIMARY KEY,
@@ -68,7 +56,7 @@ class Memory:
         self.conn.commit()
 
     # =====================
-    # ORDER SYSTEM
+    # ORDER
     # =====================
     def add_order(self, user, item, amount=1, roblox_user=None, status="WAIT"):
 
@@ -102,6 +90,14 @@ class Memory:
         except:
             return None
 
+    def get_all_orders(self):
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT * FROM orders ORDER BY id DESC")
+            return cur.fetchall()
+        except:
+            return []
+
     def update_order_status(self, order_id, status):
         try:
             with self.lock:
@@ -113,8 +109,21 @@ class Memory:
         except Exception as e:
             print("[MEMORY] update_order error:", e)
 
+    # 🔥 FIX สำคัญ (ใช้ตอนปิดห้อง)
+    def get_order_by_channel(self, channel_id):
+        try:
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT order_id FROM tickets WHERE channel_id=?",
+                (channel_id,)
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+        except:
+            return None
+
     # =====================
-    # TICKET SYSTEM
+    # TICKET
     # =====================
     def save_ticket(self, order_id, channel_id):
         try:
@@ -140,7 +149,7 @@ class Memory:
             return None
 
     # =====================
-    # STOCK SAFE
+    # STOCK
     # =====================
     def minus_stock(self, item, amount=1):
 
@@ -153,10 +162,7 @@ class Memory:
             with self.lock:
                 cur = self.conn.cursor()
 
-                cur.execute(
-                    "SELECT qty FROM stock WHERE name=?",
-                    (item,)
-                )
+                cur.execute("SELECT qty FROM stock WHERE name=?", (item,))
                 row = cur.fetchone()
 
                 if not row or row[0] < amount:
@@ -185,10 +191,7 @@ class Memory:
             with self.lock:
                 cur = self.conn.cursor()
 
-                cur.execute(
-                    "SELECT qty FROM stock WHERE name=?",
-                    (item,)
-                )
+                cur.execute("SELECT qty FROM stock WHERE name=?", (item,))
                 row = cur.fetchone()
 
                 if row:
@@ -210,10 +213,36 @@ class Memory:
     def get_stock(self, item):
         try:
             cur = self.conn.cursor()
-            cur.execute(
-                "SELECT qty FROM stock WHERE name=?",
-                (item,)
-            )
+            cur.execute("SELECT qty FROM stock WHERE name=?", (item,))
+            row = cur.fetchone()
+            return row[0] if row else 0
+        except:
+            return 0
+
+    # =====================
+    # POINTS (🔥 เพิ่มให้ครบ)
+    # =====================
+    def add_points(self, user, point):
+
+        try:
+            with self.lock:
+                cur = self.conn.cursor()
+
+                cur.execute(
+                    "INSERT INTO points(user, point) VALUES(?, ?) "
+                    "ON CONFLICT(user) DO UPDATE SET point = point + ?",
+                    (user, point, point)
+                )
+
+                self.conn.commit()
+
+        except Exception as e:
+            print("[MEMORY] add_points error:", e)
+
+    def get_points(self, user):
+        try:
+            cur = self.conn.cursor()
+            cur.execute("SELECT point FROM points WHERE user=?", (user,))
             row = cur.fetchone()
             return row[0] if row else 0
         except:
