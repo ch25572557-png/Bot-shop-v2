@@ -1,36 +1,117 @@
 import discord
 
 # =====================
-# 📦 RESTOCK MODAL
+# ❌ CANCEL SELECT
 # =====================
-class RestockModal(discord.ui.Modal, title="📦 เติมสต๊อก"):
+class CancelSelect(discord.ui.Select):
 
-    amount = discord.ui.TextInput(
-        label="จำนวนที่ต้องการเติม",
-        placeholder="เช่น 10",
-        required=True
-    )
-
-    def __init__(self, bot, item):
-        super().__init__()
+    def __init__(self, bot):
         self.bot = bot
-        self.item = item
 
-    async def on_submit(self, interaction: discord.Interaction):
+        options = []
 
         try:
-            qty = int(self.amount.value)
+            cur = bot.mem.conn.cursor()
+            cur.execute("SELECT id, item, amount, status FROM orders WHERE status!='CANCELLED' ORDER BY id DESC LIMIT 25")
+            orders = cur.fetchall()
+        except:
+            orders = []
 
-            if qty <= 0:
+        for o in orders:
+            order_id = str(o[0])
+            item = o[1]
+            amount = o[2]
+            status = o[3]
+
+            options.append(
+                discord.SelectOption(
+                    label=f"#{order_id} | {item} x{amount}",
+                    value=order_id,
+                    description=f"status: {status}"
+                )
+            )
+
+        if not options:
+            options = [
+                discord.SelectOption(
+                    label="ไม่มีออเดอร์ให้ยกเลิก",
+                    value="none"
+                )
+            ]
+
+        super().__init__(
+            placeholder="❌ เลือกออเดอร์ที่ต้องการยกเลิก",
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+
+        order_id = self.values[0]
+
+        if order_id == "none":
+            return await interaction.response.send_message(
+                "❌ ไม่มีออเดอร์",
+                ephemeral=True
+            )
+
+        try:
+            data = self.bot.mem.get_order(order_id)
+
+            if not data:
                 return await interaction.response.send_message(
-                    "❌ จำนวนไม่ถูกต้อง",
+                    "❌ ไม่พบออเดอร์",
                     ephemeral=True
                 )
 
-            self.bot.stock.add(self.item, qty, 0)
+            user, item, amount, roblox_user, status = data
+
+            if status == "DONE":
+                return await interaction.response.send_message(
+                    "❌ ออเดอร์นี้เสร็จแล้ว",
+                    ephemeral=True
+                )
+
+            # =====================
+            # ❌ CANCEL ORDER
+            # =====================
+            self.bot.mem.update_order_status(order_id, "CANCELLED")
+
+            # =====================
+            # 🔁 RETURN STOCK
+            # =====================
+            if hasattr(self.bot.stock, "add"):
+                self.bot.stock.add(item, amount, 0)
+
+            else:
+                cur = self.bot.mem.conn.cursor()
+                cur.execute(
+                    "UPDATE stock SET qty = qty + ? WHERE name=?",
+                    (amount, item)
+                )
+                self.bot.mem.conn.commit()
+
+            # =====================
+            # 📢 NOTIFY
+            # =====================
+            try:
+                ch_id = self.bot.brain.get("CHANNELS.ORDER_NOTIFY")
+
+                if ch_id:
+                    channel = self.bot.get_channel(int(ch_id))
+
+                    if channel:
+                        embed = discord.Embed(
+                            title="❌ ORDER CANCELLED",
+                            description=f"Order #{order_id}\nItem: {item} x{amount}",
+                            color=0xff0000
+                        )
+                        await channel.send(embed=embed)
+
+            except:
+                pass
 
             await interaction.response.send_message(
-                f"✅ เติมสต๊อก {self.item} +{qty}",
+                f"✅ ยกเลิกออเดอร์ #{order_id} แล้ว",
                 ephemeral=True
             )
 
@@ -42,63 +123,11 @@ class RestockModal(discord.ui.Modal, title="📦 เติมสต๊อก"):
 
 
 # =====================
-# 📦 STOCK SELECT (SAFE + FUTURE READY)
+# ❌ VIEW
 # =====================
-class StockSelect(discord.ui.Select):
-
-    def __init__(self, bot):
-        self.bot = bot
-
-        items = []
-
-        try:
-            cur = bot.mem.conn.cursor()
-            cur.execute("SELECT name FROM stock")
-            items = cur.fetchall()
-        except Exception as e:
-            print("[STOCK LOAD ERROR]", e)
-            items = []
-
-        options = [
-            discord.SelectOption(label=i[0], value=i[0])
-            for i in items[:25]
-        ]
-
-        # fallback
-        if not options:
-            options = [
-                discord.SelectOption(
-                    label="ไม่มีสินค้าในสต๊อก",
-                    value="none"
-                )
-            ]
-
-        super().__init__(
-            placeholder="📦 เลือกสินค้าที่ต้องการเติม",
-            options=options
-        )
-
-    async def callback(self, interaction: discord.Interaction):
-
-        value = self.values[0]
-
-        if value == "none":
-            return await interaction.response.send_message(
-                "❌ ไม่มีสินค้าในสต๊อก",
-                ephemeral=True
-            )
-
-        await interaction.response.send_modal(
-            RestockModal(self.bot, value)
-        )
-
-
-# =====================
-# 📦 MAIN VIEW
-# =====================
-class StockView(discord.ui.View):
+class CancelView(discord.ui.View):
 
     def __init__(self, bot):
         super().__init__(timeout=None)
         self.bot = bot
-        self.add_item(StockSelect(bot))
+        self.add_item(CancelSelect(bot))
