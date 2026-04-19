@@ -19,8 +19,7 @@ class ConfigLoader:
         try:
             if not os.path.exists(self.path):
                 print("[CONFIG] ❌ config.json not found")
-                with self._lock:
-                    self.config = {}
+                self.config = {}
                 return
 
             with open(self.path, "r", encoding="utf-8") as f:
@@ -37,8 +36,7 @@ class ConfigLoader:
 
         except Exception as e:
             print(f"[CONFIG] ❌ Load error: {e}")
-            with self._lock:
-                self.config = {}
+            self.config = {}
 
     # =====================
     # 🔄 RELOAD
@@ -47,62 +45,59 @@ class ConfigLoader:
         self.load()
 
     # =====================
-    # 🔎 SAFE GET (THREAD SAFE + DEBUG)
+    # 🔎 SAFE GET (FIXED)
     # =====================
     def get(self, path, default=None):
-        with self._lock:
-            try:
-                keys = path.split(".")
-                data = self.config
+        try:
+            keys = path.split(".")
+            data = self.config
 
-                for k in keys:
+            for k in keys:
+                if not isinstance(data, dict):
+                    return default
+                if k not in data:
+                    return default
+                data = data[k]
 
-                    if not isinstance(data, dict):
-                        print(f"[CONFIG] ⚠️ Path broken at {k} ({path})")
-                        return default
+            return data
 
-                    if k not in data:
-                        # 🔥 debug สำคัญมาก
-                        print(f"[CONFIG] ⚠️ Missing key: {path}")
-                        return default
-
-                    data = data[k]
-
-                return data
-
-            except Exception as e:
-                print(f"[CONFIG] ❌ Get error ({path}): {e}")
-                return default
+        except:
+            return default
 
     # =====================
-    # 🔐 CHANNEL (SAFE INT)
+    # 🔐 CHANNEL (SAFE)
     # =====================
     def get_channel(self, key):
         val = self.get(f"CHANNELS.{key}")
 
+        if not val:
+            return None
+
         try:
             return int(val)
         except:
-            print(f"[CONFIG] ⚠️ Invalid channel ID: {key} = {val}")
             return None
 
     # =====================
-    # 🔐 ROLE (SAFE INT)
+    # 🔐 ROLE (SAFE)
     # =====================
     def get_role(self, key):
         val = self.get(f"ROLES.{key}")
 
+        if not val:
+            return None
+
         try:
             return int(val)
         except:
-            print(f"[CONFIG] ⚠️ Invalid role ID: {key} = {val}")
             return None
 
     # =====================
-    # ⚙️ SETTING
+    # ⚙️ SETTING (SAFE)
     # =====================
     def get_setting(self, key, default=None):
-        return self.get(f"SETTINGS.{key}", default)
+        val = self.get(f"SETTINGS.{key}", default)
+        return default if val is None else val
 
     # =====================
     # 🔢 VERSION
