@@ -57,6 +57,16 @@ class CancelModal(discord.ui.Modal, title="❌ ยกเลิกออเดอ
             self.bot.mem.update_order_status(order_id, "CANCELLED")
             self.bot.mem.add_stock(item, amount)
 
+            # 🔥 ปิดห้องด้วย
+            try:
+                ch_id = self.bot.mem.get_ticket(order_id)
+                if ch_id:
+                    ch = self.bot.get_channel(int(ch_id))
+                    if ch:
+                        await ch.delete()
+            except:
+                pass
+
             await interaction.response.send_message(
                 f"✅ ยกเลิกออเดอร์ #{order_id}",
                 ephemeral=True
@@ -84,7 +94,7 @@ class RestockModal(discord.ui.Modal, title="🔄 รีสต็อก"):
             if qty <= 0:
                 raise ValueError
 
-            self.bot.stock.add(name, qty, 0)
+            self.bot.mem.add_stock(name, qty)
 
             await interaction.response.send_message(
                 f"✅ รีสต็อก {name} +{qty}",
@@ -96,7 +106,7 @@ class RestockModal(discord.ui.Modal, title="🔄 รีสต็อก"):
 
 
 # =====================
-# 👑 ADMIN VIEW
+# 👑 ADMIN VIEW (PERSISTENT)
 # =====================
 
 class AdminView(discord.ui.View):
@@ -105,9 +115,6 @@ class AdminView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    # =====================
-    # 🔐 CHECK ADMIN
-    # =====================
     def is_admin(self, interaction):
 
         try:
@@ -116,13 +123,11 @@ class AdminView(discord.ui.View):
         except:
             return False
 
-    # =====================
-    # ➕ ADD PRODUCT
-    # =====================
+    # ➕ ADD
     @discord.ui.button(
         label="➕ เพิ่มสินค้า",
         style=discord.ButtonStyle.green,
-        custom_id="admin_add_product"
+        custom_id="admin_add"
     )
     async def add(self, interaction: discord.Interaction, button: discord.ui.Button):
 
@@ -131,13 +136,11 @@ class AdminView(discord.ui.View):
 
         await interaction.response.send_modal(AddModal(self.bot))
 
-    # =====================
-    # ❌ CANCEL ORDER
-    # =====================
+    # ❌ CANCEL
     @discord.ui.button(
         label="❌ ยกเลิกออเดอร์",
         style=discord.ButtonStyle.red,
-        custom_id="admin_cancel_order"
+        custom_id="admin_cancel"
     )
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
 
@@ -146,9 +149,7 @@ class AdminView(discord.ui.View):
 
         await interaction.response.send_modal(CancelModal(self.bot))
 
-    # =====================
     # 🔄 RESTOCK
-    # =====================
     @discord.ui.button(
         label="🔄 รีสต็อก",
         style=discord.ButtonStyle.blurple,
@@ -161,13 +162,11 @@ class AdminView(discord.ui.View):
 
         await interaction.response.send_modal(RestockModal(self.bot))
 
-    # =====================
     # 📊 VIEW STOCK
-    # =====================
     @discord.ui.button(
         label="📊 ดูสต๊อก",
         style=discord.ButtonStyle.gray,
-        custom_id="admin_view_stock"
+        custom_id="admin_stock"
     )
     async def view_stock(self, interaction: discord.Interaction, button: discord.ui.Button):
 
