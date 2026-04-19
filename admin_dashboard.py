@@ -1,7 +1,7 @@
 import discord
 
 # =====================
-# 📊 STOCK BUTTON VIEW
+# 📦 STOCK VIEW
 # =====================
 class StockButton(discord.ui.View):
 
@@ -29,7 +29,7 @@ class StockButton(discord.ui.View):
 
 
 # =====================
-# 📊 ORDERS BUTTON VIEW
+# 📊 ORDERS VIEW
 # =====================
 class OrdersButton(discord.ui.View):
 
@@ -57,7 +57,7 @@ class OrdersButton(discord.ui.View):
 
 
 # =====================
-# 🧠 MAIN DASHBOARD (FIXED)
+# 🧠 MAIN DASHBOARD (FIXED + CLEAN)
 # =====================
 class AdminDashboard(discord.ui.View):
 
@@ -67,14 +67,18 @@ class AdminDashboard(discord.ui.View):
 
     @discord.ui.button(label="📦 STOCK", style=discord.ButtonStyle.green)
     async def open_stock(self, interaction: discord.Interaction, button: discord.ui.Button):
+
         await interaction.response.send_message(
+            content="📦 เปิดเมนูสต๊อก",
             view=StockButton(self.bot),
             ephemeral=True
         )
 
     @discord.ui.button(label="📊 ORDERS", style=discord.ButtonStyle.blurple)
     async def open_orders(self, interaction: discord.Interaction, button: discord.ui.Button):
+
         await interaction.response.send_message(
+            content="📊 เปิดเมนูออเดอร์",
             view=OrdersButton(self.bot),
             ephemeral=True
         )
