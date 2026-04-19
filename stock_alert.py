@@ -8,10 +8,12 @@ class StockAlertSystem:
         self.bot = bot
 
         self.running = False
-        self.last_alert = {}
+
+        # 🔥 เก็บ state แบบ smarter
+        self.last_state = {}
 
     # =====================
-    # 🚀 START LOOP (SAFE)
+    # 🚀 START LOOP
     # =====================
     def start(self):
         if self.running:
@@ -63,9 +65,15 @@ class StockAlertSystem:
         channel_id = self.bot.brain.channel("STOCK_ALERT_CHANNEL")
         role_id = self.bot.brain.role("ADMIN_ROLE")
 
-        # 🔥 safe convert
+        # =====================
+        # 🔥 SAFE CHANNEL FETCH
+        # =====================
         try:
             channel = self.bot.get_channel(int(channel_id)) if channel_id else None
+
+            if not channel:
+                channel = await self.bot.fetch_channel(int(channel_id))
+
         except:
             channel = None
 
@@ -73,6 +81,9 @@ class StockAlertSystem:
             print("[STOCK ALERT] channel not found")
             return
 
+        # =====================
+        # 📦 GET STOCK
+        # =====================
         data = safe_db_execute(
             self.bot.mem.conn,
             "SELECT name, qty FROM stock"
@@ -83,20 +94,27 @@ class StockAlertSystem:
 
         alerts = []
 
-        for item in data:
+        for name, qty in data:
 
-            name = item[0]
-            qty = item[1]
+            # =====================
+            # 🔥 STATE CHANGE DETECTION (FIX)
+            # =====================
+            prev = self.last_state.get(name)
 
-            if qty <= low_limit:
+            is_low = qty <= low_limit
 
-                # กัน spam ซ้ำ
-                if self.last_alert.get(name) == qty:
-                    continue
+            # แจ้งเฉพาะ "เปลี่ยนสถานะ"
+            if prev == is_low:
+                continue
 
-                self.last_alert[name] = qty
+            self.last_state[name] = is_low
+
+            if is_low:
                 alerts.append(f"⚠️ {name} เหลือ {qty}")
 
+        # =====================
+        # 📢 SEND ALERT
+        # =====================
         if alerts:
 
             role_ping = f"<@&{role_id}>" if role_id else ""
@@ -107,3 +125,9 @@ class StockAlertSystem:
             )
 
             await safe_send(channel, content=msg)
+
+    # =====================
+    # 🔄 RESET (CALL FROM RESTOCK IF WANT)
+    # =====================
+    def reset_item(self, item):
+        self.last_state.pop(item, None)
