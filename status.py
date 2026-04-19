@@ -3,25 +3,26 @@ class StatusSystem:
         self.mem = mem
 
     # =====================
-    # 🔄 SET STATUS
+    # 🔄 SET STATUS (FIX)
     # =====================
     def set(self, order_id, status):
         try:
-            return self.mem.update_order_status(order_id, status)
+            self.mem.update_order_status(order_id, status)
+            return True
         except Exception as e:
             print("[STATUS] set error:", e)
             return False
 
     # =====================
-    # 📊 GET STATUS (FIXED BUG)
+    # 📊 GET STATUS
     # =====================
     def get(self, order_id):
         try:
             data = self.mem.get_order(order_id)
+
             if not data:
                 return None
 
-            # ✅ FIX: schema ชัดเจน (index 4 = status)
             return data[4]
 
         except Exception as e:
@@ -29,15 +30,23 @@ class StatusSystem:
             return None
 
     # =====================
-    # 🔍 DONE CHECK
+    # 🔍 DONE CHECK (SAFE)
     # =====================
     def is_done(self, order_id):
         status = self.get(order_id)
+
+        if not status:
+            return False
+
         return status in ("DONE", "LOCKED")
 
     # =====================
-    # 🧠 ACTIVE CHECK
+    # 🧠 ACTIVE CHECK (FIX)
     # =====================
     def is_active(self, order_id):
         status = self.get(order_id)
-        return status not in ("DONE", "LOCKED")
+
+        if not status:
+            return False
+
+        return status not in ("DONE", "LOCKED", "CANCELLED")
