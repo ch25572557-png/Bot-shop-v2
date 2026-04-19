@@ -51,12 +51,12 @@ class OrderSystem:
             print("[ADMIN SEND ERROR]", e)
 
     # =====================
-    # 📢 TICKET UPDATE (FIXED AWAIT)
+    # 📢 TICKET UPDATE
     # =====================
     async def send_ticket(self, order_id, msg):
 
         try:
-            channel_id = await self.mem.get_ticket(order_id)  # 🔥 FIX
+            channel_id = await self.mem.get_ticket(order_id)
             if not channel_id:
                 return
 
@@ -74,7 +74,7 @@ class OrderSystem:
             print("[TICKET ERROR]", e)
 
     # =====================
-    # 🛒 CREATE ORDER (FIXED)
+    # 🛒 CREATE ORDER (FIXED + FARM CONNECT)
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
@@ -83,10 +83,11 @@ class OrderSystem:
         except:
             amount = 1
 
-        # 🔥 FIX: await
+        item = item.lower().strip()
+
         order_id = await self.mem.add_order(
             str(user),
-            item.lower(),
+            item,
             amount,
             roblox_user,
             "PENDING"
@@ -94,6 +95,16 @@ class OrderSystem:
 
         if not order_id:
             return False
+
+        # 🔥 IMPORTANT FIX: connect to farm system
+        await self.farm_queue.put({
+            "order_id": order_id,
+            "item": item,
+            "amount": amount,
+            "guild": guild,
+            "user": user,
+            "roblox_user": roblox_user
+        })
 
         await self.notify.admin(user, item, order_id)
         await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
@@ -108,7 +119,7 @@ class OrderSystem:
 
         print(f"[DEBUG] complete() called for channel {channel.id}")
 
-        order_id = await self.mem.get_order_by_channel(str(channel.id))  # 🔥 FIX
+        order_id = await self.mem.get_order_by_channel(str(channel.id))
         if not order_id:
             print("[DEBUG] No order found")
             return False
@@ -119,22 +130,23 @@ class OrderSystem:
         self.processing.add(order_id)
 
         try:
-            data = await self.mem.get_order(order_id)  # 🔥 FIX
+            data = await self.mem.get_order(order_id)
             if not data:
                 return False
 
             user, item, amount, roblox_user, status = data
+            item = item.lower().strip()
 
             if status == "DONE":
                 return False
 
             # =====================
-            # 🔥 STOCK FIX
+            # 🔥 STOCK CHECK
             # =====================
             ok = await self.mem.minus_stock(item, amount)
 
             if not ok:
-                await channel.send("❌ สต๊อกไม่พอ")
+                await channel.send("❌ สต๊อกไม่พอ (หรือยังฟาร์มไม่เสร็จ)")
                 return False
 
             # =====================
@@ -145,11 +157,7 @@ class OrderSystem:
             point = int(self.brain.setting("POINT_PER_ORDER", 0))
             await self.mem.add_points(user, point)
 
-            # =====================
-            # NOTIFY
-            # =====================
             await self.notify.complete(user, item, order_id)
-
             await self.backup.complete(order_id, user, item)
 
             await self.send_ticket(order_id, "✅ ส่งของเสร็จแล้ว")
@@ -178,7 +186,7 @@ class OrderSystem:
             self.processing.discard(order_id)
 
     # =====================
-    # 🧠 FARM
+    # 🧠 FARM WORKER (FIXED FULL FLOW)
     # =====================
     async def farm_worker(self):
 
@@ -187,7 +195,16 @@ class OrderSystem:
                 task = await self.farm_queue.get()
                 await asyncio.sleep(2)
 
-                await self.mem.add_stock(task["item"], task["amount"])  # 🔥 FIX
+                order_id = task["order_id"]
+
+                # 🔥 mark farming status
+                await self.mem.update_order_status(order_id, "FARMING")
+
+                # 🔥 add stock
+                await self.mem.add_stock(task["item"], task["amount"])
+
+                # 🔥 update ticket
+                await self.send_ticket(order_id, "🌾 ฟาร์มสินค้าเสร็จแล้ว")
 
             except Exception as e:
                 print("[FARM ERROR]", e)
