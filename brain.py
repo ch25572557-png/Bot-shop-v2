@@ -1,13 +1,13 @@
 import threading
 from config_loader import ConfigLoader
 
+
 class Brain:
 
     def __init__(self):
         self._lock = threading.RLock()
         self._version = 0
 
-        # 📦 central config
         self.config = ConfigLoader()
 
     # =====================
@@ -27,21 +27,31 @@ class Brain:
             return self.config.get(path, default)
 
     # =====================
-    # 🔐 CHANNEL (LOCKED)
+    # 🔐 CHANNEL (SAFE INT)
     # =====================
     def channel(self, key):
         with self._lock:
-            return self.config.get_channel(key)
+            val = self.config.get_channel(key)
+
+            try:
+                return int(val)
+            except:
+                return None
 
     # =====================
-    # 👑 ROLE (LOCKED)
+    # 👑 ROLE (SAFE INT)
     # =====================
     def role(self, key):
         with self._lock:
-            return self.config.get_role(key)
+            val = self.config.get_role(key)
+
+            try:
+                return int(val)
+            except:
+                return None
 
     # =====================
-    # ⚙️ SETTING (LOCKED)
+    # ⚙️ SETTING (SAFE)
     # =====================
     def setting(self, key, default=None):
         with self._lock:
@@ -54,7 +64,7 @@ class Brain:
         return self._version
 
     # =====================
-    # 🔁 FORCE RELOAD (SAFE)
+    # 🔁 FORCE RELOAD
     # =====================
     def force_reload(self):
         with self._lock:
