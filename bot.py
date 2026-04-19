@@ -1,5 +1,6 @@
 import discord
 import os
+import asyncio
 from discord.ext import commands
 
 from brain import Brain
@@ -13,12 +14,10 @@ from backup import BackupSystem
 
 from shop import ShopView
 from admin import AdminView
-
 from cancel_view import CancelView
 from admin_dashboard import AdminDashboard
 from stock_view import StockView
 
-# 🆕 SYSTEMS (missing before)
 from stock_alert import StockAlertSystem
 from dashboard_worker import DashboardWorker
 
@@ -54,7 +53,7 @@ bot.order = OrderSystem(
     bot
 )
 
-# 🆕 NEW SYSTEMS
+# 🆕 SYSTEMS
 bot.stock_alert = StockAlertSystem(bot)
 bot.dashboard = DashboardWorker(bot)
 
@@ -64,14 +63,16 @@ bot.dashboard = DashboardWorker(bot)
 # =====================
 @bot.event
 async def on_ready():
+
     print(f"🟢 LOGGED IN AS {bot.user}")
 
     if getattr(bot, "ready_done", False):
         return
     bot.ready_done = True
 
+
     # =====================
-    # 🎛 VIEWS
+    # 🎛 SAFE VIEW REGISTER
     # =====================
     def safe_add(view_cls, name):
         try:
@@ -88,31 +89,22 @@ async def on_ready():
 
 
     # =====================
-    # 📦 START SYSTEMS (SAFE FIRE)
+    # 🚀 START SYSTEMS (ASYNC SAFE FIX)
     # =====================
-    try:
-        bot.stock.start()
-        print("📦 STOCK STARTED")
-    except Exception as e:
-        print("[STOCK ERROR]", e)
+    async def safe_start(name, fn):
+        try:
+            result = fn()
+            if asyncio.iscoroutine(result):
+                await result
+            print(f"🚀 {name} STARTED")
+        except Exception as e:
+            print(f"[{name} ERROR]", e)
 
-    try:
-        bot.order.start()
-        print("🛒 ORDER STARTED")
-    except Exception as e:
-        print("[ORDER ERROR]", e)
 
-    try:
-        bot.stock_alert.start()
-        print("🚨 STOCK ALERT STARTED")
-    except Exception as e:
-        print("[ALERT ERROR]", e)
-
-    try:
-        bot.dashboard.start()
-        print("📊 DASHBOARD STARTED")
-    except Exception as e:
-        print("[DASHBOARD ERROR]", e)
+    await safe_start("STOCK", bot.stock.start)
+    await safe_start("ORDER", bot.order.start)
+    await safe_start("ALERT", bot.stock_alert.start)
+    await safe_start("DASHBOARD", bot.dashboard.start)
 
 
 # =====================
