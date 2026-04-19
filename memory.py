@@ -9,9 +9,6 @@ class Memory:
         self.db = None
         self.lock = asyncio.Lock()
 
-    # =====================
-    # 🚀 INIT (สำคัญมาก)
-    # =====================
     async def init(self):
 
         self.db = await aiosqlite.connect(self.db_path)
@@ -53,9 +50,6 @@ class Memory:
 
         await self.db.commit()
 
-    # =====================
-    # 🔧 CORE EXECUTE
-    # =====================
     async def execute(self, query, params=(), fetch=False, one=False):
 
         async with self.lock:
@@ -137,10 +131,14 @@ class Memory:
         return row[0] if row else None
 
     # =====================
-    # 📦 STOCK (เทพจริง)
+    # 📦 STOCK (FIXED)
     # =====================
+    def _norm(self, item):
+        return str(item).strip().lower()
+
     async def minus_stock(self, item, amount=1):
 
+        item = self._norm(item)
         amount = max(int(amount or 1), 1)
 
         async with self.lock:
@@ -151,11 +149,11 @@ class Memory:
             )
 
             await self.db.commit()
-
-            return cur.rowcount > 0  # 🔥 atomic check
+            return cur.rowcount > 0
 
     async def add_stock(self, item, amount):
 
+        item = self._norm(item)
         amount = max(int(amount or 1), 1)
 
         await self.execute("""
@@ -167,6 +165,8 @@ class Memory:
 
     async def get_stock(self, item):
 
+        item = self._norm(item)
+
         row = await self.execute(
             "SELECT qty FROM stock WHERE name=?",
             (item,),
@@ -177,10 +177,12 @@ class Memory:
 
     async def get_all_stock(self):
 
-        return await self.execute(
+        rows = await self.execute(
             "SELECT name,qty FROM stock",
             fetch=True
         )
+
+        return rows if rows else []
 
     # =====================
     # 💰 POINTS
