@@ -13,18 +13,15 @@ class ShopView(discord.ui.View):
     @discord.ui.button(
         label="🛒 BUY",
         style=discord.ButtonStyle.green,
-        custom_id="shop_buy_button"  # 🔥 FIX สำคัญ
+        custom_id="shop_buy_button"
     )
     async def buy(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        try:
-            await interaction.response.send_modal(OrderModal(self.bot))
-        except Exception as e:
-            print("[SHOP] modal error:", e)
+        await interaction.response.send_modal(OrderModal(self.bot))
 
 
 # =====================
-# 🧾 ORDER MODAL (FINAL)
+# 🧾 ORDER MODAL (FIXED)
 # =====================
 class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
 
@@ -39,7 +36,10 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
     async def on_submit(self, interaction: discord.Interaction):
 
         try:
-            item = self.item.value.strip()
+            # =====================
+            # 📦 NORMALIZE ITEM
+            # =====================
+            item = self.item.value.strip().lower()
 
             if not item:
                 return await interaction.response.send_message(
@@ -58,9 +58,9 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
                 amount = 1
 
             # =====================
-            # 🔍 CHECK STOCK (🔥 ใหม่)
+            # 🔍 STOCK FIX (🔥 สำคัญมาก)
             # =====================
-            stock = self.bot.mem.get_stock(item)
+            stock = await self.bot.mem.get_stock(item)
 
             if stock <= 0:
                 return await interaction.response.send_message(
@@ -75,19 +75,19 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
                 )
 
             # =====================
-            # 🎮 ROBLOX
+            # 🎮 ROBLOX USER
             # =====================
             roblox_user = self.roblox_user.value.strip() or None
 
             # =====================
-            # 🛒 CREATE ORDER
+            # 🛒 CREATE ORDER (FIXED CALL)
             # =====================
-            order_id = await self.bot.order.create(
-                interaction.guild,
-                interaction.user,
+            order_id = await self.bot.mem.add_order(
+                interaction.user.name,
                 item,
                 amount,
-                roblox_user
+                roblox_user,
+                "PENDING"
             )
 
             if not order_id:
@@ -95,6 +95,16 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
                     "❌ สร้างออเดอร์ไม่สำเร็จ",
                     ephemeral=True
                 )
+
+            # =====================
+            # 🎫 CREATE TICKET (IMPORTANT FIX)
+            # =====================
+            await self.bot.ticket.create(
+                interaction.guild,
+                interaction.user,
+                order_id,
+                interaction
+            )
 
             # =====================
             # ✅ SUCCESS
