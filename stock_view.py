@@ -1,5 +1,6 @@
 import discord
 
+
 # =====================
 # 📦 RESTOCK MODAL
 # =====================
@@ -27,7 +28,25 @@ class RestockModal(discord.ui.Modal, title="📦 เติมสต๊อก"):
                     ephemeral=True
                 )
 
-            self.bot.stock.add(self.item, qty, 0)
+            # =====================
+            # 🔥 USE MEMORY LAYER (FIX)
+            # =====================
+            self.bot.mem.add_stock(self.item, qty)
+
+            # =====================
+            # 📢 LOW STOCK CHECK TRIGGER
+            # =====================
+            try:
+                low = int(self.bot.brain.setting("LOW_STOCK", 100))
+                current = self.bot.mem.get_stock(self.item)
+
+                if current > low:
+                    pass  # ok
+                else:
+                    print(f"[LOW STOCK WARNING] {self.item} = {current}")
+
+            except:
+                pass
 
             await interaction.response.send_message(
                 f"✅ เติมสต๊อก: {self.item} +{qty}",
@@ -53,7 +72,8 @@ class StockSelect(discord.ui.Select):
             cur = bot.mem.conn.cursor()
             cur.execute("SELECT name FROM stock")
             items = cur.fetchall()
-        except:
+        except Exception as e:
+            print("[STOCK SELECT ERROR]", e)
             items = []
 
         options = []
@@ -66,7 +86,6 @@ class StockSelect(discord.ui.Select):
                 )
             )
 
-        # 🔥 กัน dropdown ว่าง (สำคัญ)
         if not options:
             options = [
                 discord.SelectOption(
@@ -76,22 +95,24 @@ class StockSelect(discord.ui.Select):
             ]
 
         super().__init__(
-            placeholder="📦 เลือกสินค้าที่ต้องการเติม",
+            placeholder="📦 เลือกสินค้า",
             options=options,
             disabled=(len(items) == 0)
         )
 
     async def callback(self, interaction: discord.Interaction):
 
-        if self.values[0] == "none":
-            return await interaction.response.send_message(
-                "❌ ไม่มีสินค้าในสต๊อก",
-                ephemeral=True
-            )
-
         try:
+            value = self.values[0]
+
+            if value == "none":
+                return await interaction.response.send_message(
+                    "❌ ไม่มีสินค้า",
+                    ephemeral=True
+                )
+
             await interaction.response.send_modal(
-                RestockModal(self.bot, self.values[0])
+                RestockModal(self.bot, value)
             )
 
         except Exception as e:
@@ -102,7 +123,7 @@ class StockSelect(discord.ui.Select):
 
 
 # =====================
-# 📦 VIEW หลัก
+# 📦 VIEW
 # =====================
 class StockView(discord.ui.View):
 
