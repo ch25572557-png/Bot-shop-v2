@@ -1,9 +1,9 @@
 import discord
 
 # =====================
-# 📦 MODAL
+# 📦 RESTOCK MODAL
 # =====================
-class RestockModal(discord.ui.Modal, title="📦 Restock Item"):
+class RestockModal(discord.ui.Modal, title="📦 เติมสต๊อก"):
 
     amount = discord.ui.TextInput(
         label="จำนวนที่ต้องการเติม",
@@ -30,7 +30,7 @@ class RestockModal(discord.ui.Modal, title="📦 Restock Item"):
             self.bot.stock.add(self.item, qty, 0)
 
             await interaction.response.send_message(
-                f"✅ เติม {self.item} +{qty}",
+                f"✅ เติมสต๊อก {self.item} +{qty}",
                 ephemeral=True
             )
 
@@ -42,7 +42,7 @@ class RestockModal(discord.ui.Modal, title="📦 Restock Item"):
 
 
 # =====================
-# 📦 SELECT
+# 📦 STOCK SELECT (SAFE + FUTURE READY)
 # =====================
 class StockSelect(discord.ui.Select):
 
@@ -55,31 +55,27 @@ class StockSelect(discord.ui.Select):
             cur = bot.mem.conn.cursor()
             cur.execute("SELECT name FROM stock")
             items = cur.fetchall()
-        except:
+        except Exception as e:
+            print("[STOCK LOAD ERROR]", e)
             items = []
 
-        options = []
+        options = [
+            discord.SelectOption(label=i[0], value=i[0])
+            for i in items[:25]
+        ]
 
-        for i in items[:25]:
-            options.append(
-                discord.SelectOption(
-                    label=i[0],
-                    value=i[0]
-                )
-            )
-
+        # fallback
         if not options:
-            options.append(
+            options = [
                 discord.SelectOption(
                     label="ไม่มีสินค้าในสต๊อก",
                     value="none"
                 )
-            )
+            ]
 
         super().__init__(
             placeholder="📦 เลือกสินค้าที่ต้องการเติม",
-            options=options,
-            disabled=len(items) == 0
+            options=options
         )
 
     async def callback(self, interaction: discord.Interaction):
@@ -98,10 +94,11 @@ class StockSelect(discord.ui.Select):
 
 
 # =====================
-# 📦 VIEW
+# 📦 MAIN VIEW
 # =====================
 class StockView(discord.ui.View):
 
     def __init__(self, bot):
         super().__init__(timeout=None)
+        self.bot = bot
         self.add_item(StockSelect(bot))
