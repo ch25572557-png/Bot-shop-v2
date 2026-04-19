@@ -28,16 +28,16 @@ class OrderSystem:
         asyncio.create_task(self.farm_worker())
 
     # =====================
-    # 📢 ADMIN SEND
+    # 📢 ADMIN SEND (FIX KEY)
     # =====================
     async def send_admin(self, title, desc, color=0x00ffcc):
 
         try:
-            ch_id = self.brain.get("CHANNELS.ORDER_NOTIFY")
+            ch_id = self.brain.channel("ORDER_NOTIFY")  # 🔥 FIX
             if not ch_id:
                 return
 
-            channel = self.bot.get_channel(int(ch_id)) or await self.bot.fetch_channel(int(ch_id))
+            channel = self.bot.get_channel(ch_id) or await self.bot.fetch_channel(ch_id)
 
             if channel:
                 embed = discord.Embed(
@@ -94,20 +94,16 @@ class OrderSystem:
         if not order_id:
             return False
 
-        await self.send_admin(
-            "📦 NEW ORDER",
-            f"Order #{order_id}\nUser: {user}\nItem: {item} x{amount}",
-            0x00ffcc
-        )
-
+        # 🔥 ใช้ notify ตัวเดียวพอ (ไม่ต้อง send_admin ซ้ำ)
         await self.notify.admin(user, item, order_id)
+
         await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
         await self.ticket.create(guild, user, order_id)
 
         return order_id
 
     # =====================
-    # ✅ COMPLETE ORDER (FIXED)
+    # ✅ COMPLETE ORDER (FINAL FIX)
     # =====================
     async def complete(self, channel):
 
@@ -115,11 +111,11 @@ class OrderSystem:
 
         order_id = self.mem.get_order_by_channel(str(channel.id))
         if not order_id:
-            print("[DEBUG] No order found for this channel")
+            print("[DEBUG] No order found")
             return False
 
         if order_id in self.processing:
-            print("[DEBUG] Already processing order")
+            print("[DEBUG] Already processing")
             return False
 
         self.processing.add(order_id)
@@ -127,40 +123,36 @@ class OrderSystem:
         try:
             data = self.mem.get_order(order_id)
             if not data:
-                print("[DEBUG] Order data not found")
+                print("[DEBUG] Order not found")
                 return False
 
             user, item, amount, roblox_user, status = data
 
             if status == "DONE":
-                print("[DEBUG] Order already DONE")
+                print("[DEBUG] Already DONE")
                 return False
 
             # =====================
-            # 🔥 STOCK DEDUCT
+            # 🔥 STOCK
             # =====================
-            success = self.mem.minus_stock(item, amount)
-
-            if not success:
+            if not self.mem.minus_stock(item, amount):
                 await channel.send("❌ สต๊อกไม่พอ")
                 return False
 
             # =====================
-            # UPDATE STATUS
+            # STATUS
             # =====================
             self.mem.update_order_status(order_id, "DONE")
 
-            point = int(self.brain.get("SETTINGS.POINT_PER_ORDER") or 0)
+            point = int(self.brain.setting("POINT_PER_ORDER", 0))
             self.mem.add_points(user, point)
 
             # =====================
-            # ADMIN
+            # NOTIFY (🔥 FIX)
             # =====================
-            await self.send_admin(
-                "✅ ORDER COMPLETED",
-                f"Order #{order_id}\n{item} x{amount}\n+{point} points",
-                0x00ff00
-            )
+            await self.notify.complete(user, item, order_id)
+
+            await self.backup.complete(order_id, user, item)
 
             # =====================
             # TICKET
@@ -170,41 +162,40 @@ class OrderSystem:
             # =====================
             # USER
             # =====================
-            embed = discord.Embed(
-                title="✅ DONE",
-                description=f"{item} x{amount}\n+{point} points",
-                color=0x00ff00
+            await channel.send(
+                embed=discord.Embed(
+                    title="✅ DONE",
+                    description=f"{item} x{amount}\n+{point} points",
+                    color=0x00ff00
+                )
             )
-            await channel.send(embed=embed)
 
             # =====================
-            # 🔒 CLOSE CHANNEL (FIXED REAL)
+            # 🔒 DELETE CHANNEL (ULTRA SAFE)
             # =====================
             await asyncio.sleep(2)
 
             try:
-                print(f"[DEBUG] Trying to delete channel {channel.id}")
+                fresh = self.bot.get_channel(channel.id)
 
-                fresh_channel = self.bot.get_channel(channel.id)
+                if not fresh:
+                    fresh = await self.bot.fetch_channel(channel.id)
 
-                if not fresh_channel:
-                    fresh_channel = await self.bot.fetch_channel(channel.id)
-
-                if not fresh_channel:
-                    print("[CLOSE ERROR] Channel not found")
+                if not fresh:
+                    print("[DELETE] channel missing")
                     return False
 
-                await fresh_channel.delete(reason="Order completed")
-                print(f"[SUCCESS] Channel {channel.id} deleted")
+                await fresh.delete(reason=f"Order #{order_id} completed")
+                print(f"[SUCCESS] deleted {channel.id}")
 
             except discord.Forbidden:
-                print("[CLOSE ERROR] Missing permission: Manage Channels")
+                print("[DELETE ERROR] ไม่มี permission (Manage Channels)")
 
             except discord.NotFound:
-                print("[CLOSE ERROR] Channel already deleted")
+                print("[DELETE ERROR] channel หายไปแล้ว")
 
             except Exception as e:
-                print("[CLOSE ERROR]", e)
+                print("[DELETE ERROR]", e)
 
             return True
 
@@ -212,7 +203,7 @@ class OrderSystem:
             self.processing.discard(order_id)
 
     # =====================
-    # 🧠 FARM WORKER
+    # 🧠 FARM
     # =====================
     async def farm_worker(self):
 
