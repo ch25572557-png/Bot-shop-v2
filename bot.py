@@ -39,7 +39,7 @@ bot.mem = Memory()
 # =====================
 # 📦 SYSTEMS
 # =====================
-bot.stock = StockSystem(bot.mem, bot)
+bot.stock = StockSystem(bot.mem, bot.brain, bot)
 bot.ticket = TicketSystem(bot.brain, bot)
 bot.notify = NotifySystem(bot.brain, bot)
 bot.backup = BackupSystem(bot.brain, bot)
@@ -58,7 +58,7 @@ bot.dashboard = DashboardWorker(bot)
 
 
 # =====================
-# 🚀 READY EVENT (FIXED)
+# 🚀 READY EVENT
 # =====================
 @bot.event
 async def on_ready():
@@ -82,11 +82,11 @@ async def on_ready():
     # 🎛 PERSISTENT VIEW (FIXED)
     # =====================
     try:
-        bot.add_view(ShopView())
-        bot.add_view(AdminView())
-        bot.add_view(CancelView())
-        bot.add_view(StockView())
-        bot.add_view(AdminDashboard())
+        bot.add_view(ShopView(bot))
+        bot.add_view(AdminView(bot))
+        bot.add_view(CancelView(bot))
+        bot.add_view(StockView(bot))
+        bot.add_view(AdminDashboard(bot))
         print("🎛 VIEWS REGISTERED")
     except Exception as e:
         print("[VIEW ERROR]", e)
@@ -121,7 +121,7 @@ async def shop(ctx):
             description="เลือกสินค้าด้านล่าง",
             color=0x00ffcc
         ),
-        view=ShopView()
+        view=ShopView(bot)
     )
 
 
@@ -132,7 +132,7 @@ async def admin(ctx):
             title="🛠 ADMIN PANEL",
             color=0xffcc00
         ),
-        view=AdminView()
+        view=AdminView(bot)
     )
 
 
@@ -144,12 +144,12 @@ async def dashboard(ctx):
             description="จัดการระบบทั้งหมด",
             color=0x2ecc71
         ),
-        view=AdminDashboard()
+        view=AdminDashboard(bot)
     )
 
 
 # =====================
-# 🚀 RUN BOT (RAILWAY SAFE)
+# 🚀 RUN BOT
 # =====================
 if __name__ == "__main__":
 
