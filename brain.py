@@ -1,6 +1,7 @@
 import threading
 from config_loader import ConfigLoader
 
+
 class Brain:
 
     def __init__(self):
@@ -22,7 +23,11 @@ class Brain:
     # =====================
     def get(self, path, default=None):
         with self._lock:
-            return self.config.get(path, default)
+            try:
+                return self.config.get(path, default)
+            except Exception as e:
+                print("[BRAIN GET ERROR]", e)
+                return default
 
     # =====================
     # 🔐 CHANNEL
@@ -63,7 +68,12 @@ class Brain:
     # =====================
     def setting(self, key, default=None):
         with self._lock:
-            return self.config.get_setting(key, default)
+            try:
+                val = self.config.get_setting(key, default)
+                return default if val is None else val
+            except Exception as e:
+                print("[BRAIN SETTING ERROR]", e)
+                return default
 
     # =====================
     # 🔢 VERSION
@@ -80,3 +90,17 @@ class Brain:
         with self._lock:
             self._version += 1
             print(f"[BRAIN] force reload v{self._version}")
+
+    # =====================
+    # 🧠 DEBUG FULL (เพิ่มแต่ไม่ลบของเดิม)
+    # =====================
+    def debug_all(self):
+        with self._lock:
+            try:
+                print("===== BRAIN DEBUG =====")
+                print("CHANNELS:", getattr(self.config, "channels", None))
+                print("ROLES:", getattr(self.config, "roles", None))
+                print("SETTINGS:", getattr(self.config, "settings", None))
+                print("=======================")
+            except Exception as e:
+                print("[BRAIN DEBUG ERROR]", e)
