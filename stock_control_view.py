@@ -1,4 +1,5 @@
 import discord
+from permissions import admin_only
 
 # =====================
 # 📦 MODAL (+/- AMOUNT)
@@ -44,6 +45,13 @@ class StockAmountModal(discord.ui.Modal):
                     "UPDATE stock SET qty = qty - ? WHERE name=? AND qty >= ?",
                     (qty, self.item, qty)
                 )
+
+                if cur.rowcount == 0:
+                    return await interaction.response.send_message(
+                        "❌ สต๊อกไม่พอ",
+                        ephemeral=True
+                    )
+
                 msg = f"⚠️ ลด {self.item} -{qty}"
 
             self.bot.mem.conn.commit()
@@ -63,22 +71,32 @@ class StockAmountModal(discord.ui.Modal):
 class StockControlView(discord.ui.View):
 
     def __init__(self, bot, item):
-        super().__init__(timeout=60)
+        super().__init__(timeout=None)  # 🔥 FIX: ไม่ให้ view ตาย
         self.bot = bot
         self.item = item
 
-    # ➕ เพิ่ม (เปิด modal)
+    # 🔥 FIX: กันคนไม่ใช่แอด
+    async def interaction_check(self, interaction: discord.Interaction):
+        return await admin_only(interaction)
+
+    # ➕ เพิ่ม
     @discord.ui.button(label="➕ เพิ่ม", style=discord.ButtonStyle.green)
     async def add_stock(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        await interaction.response.send_modal(
-            StockAmountModal(self.bot, self.item, "add")
-        )
+        try:
+            await interaction.response.send_modal(
+                StockAmountModal(self.bot, self.item, "add")
+            )
+        except Exception as e:
+            print("[MODAL ERROR ADD]", e)
 
-    # ➖ ลด (เปิด modal)
+    # ➖ ลด
     @discord.ui.button(label="➖ ลด", style=discord.ButtonStyle.red)
     async def remove_stock(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        await interaction.response.send_modal(
-            StockAmountModal(self.bot, self.item, "remove")
-        )
+        try:
+            await interaction.response.send_modal(
+                StockAmountModal(self.bot, self.item, "remove")
+            )
+        except Exception as e:
+            print("[MODAL ERROR REMOVE]", e)
