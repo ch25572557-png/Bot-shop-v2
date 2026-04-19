@@ -1,7 +1,8 @@
 import discord
 
+
 # =====================
-# 🛒 SHOP VIEW
+# 🛒 SHOP VIEW (FIXED)
 # =====================
 class ShopView(discord.ui.View):
 
@@ -9,7 +10,11 @@ class ShopView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
 
-    @discord.ui.button(label="🛒 BUY", style=discord.ButtonStyle.green)
+    @discord.ui.button(
+        label="🛒 BUY",
+        style=discord.ButtonStyle.green,
+        custom_id="shop_buy_button"  # 🔥 FIX สำคัญ
+    )
     async def buy(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         try:
@@ -19,7 +24,7 @@ class ShopView(discord.ui.View):
 
 
 # =====================
-# 🧾 ORDER MODAL (FIXED)
+# 🧾 ORDER MODAL (FINAL)
 # =====================
 class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
 
@@ -30,33 +35,20 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
-        self._locked = False  # 🔒 กันกดซ้ำ
 
     async def on_submit(self, interaction: discord.Interaction):
 
-        # =====================
-        # 🔒 DOUBLE SUBMIT GUARD
-        # =====================
-        if self._locked:
-            return
-
-        self._locked = True
-
         try:
-            # =====================
-            # 🔒 ITEM SAFE
-            # =====================
             item = self.item.value.strip()
 
             if not item:
-                await interaction.response.send_message(
+                return await interaction.response.send_message(
                     "❌ กรุณาใส่ชื่อสินค้า",
                     ephemeral=True
                 )
-                return
 
             # =====================
-            # 🔢 AMOUNT SAFE (NO CRASH)
+            # 🔢 AMOUNT SAFE
             # =====================
             try:
                 amount = int(self.amount.value)
@@ -66,18 +58,31 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
                 amount = 1
 
             # =====================
-            # 🎮 ROBLOX SAFE
+            # 🔍 CHECK STOCK (🔥 ใหม่)
             # =====================
-            roblox_user = None
-            try:
-                roblox_user = self.roblox_user.value.strip() or None
-            except:
-                roblox_user = None
+            stock = self.bot.mem.get_stock(item)
+
+            if stock <= 0:
+                return await interaction.response.send_message(
+                    f"❌ สินค้า '{item}' หมด",
+                    ephemeral=True
+                )
+
+            if amount > stock:
+                return await interaction.response.send_message(
+                    f"❌ สต๊อกมีแค่ {stock}",
+                    ephemeral=True
+                )
 
             # =====================
-            # 🟢 CREATE ORDER
+            # 🎮 ROBLOX
             # =====================
-            await self.bot.order.create(
+            roblox_user = self.roblox_user.value.strip() or None
+
+            # =====================
+            # 🛒 CREATE ORDER
+            # =====================
+            order_id = await self.bot.order.create(
                 interaction.guild,
                 interaction.user,
                 item,
@@ -85,24 +90,25 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
                 roblox_user
             )
 
+            if not order_id:
+                return await interaction.response.send_message(
+                    "❌ สร้างออเดอร์ไม่สำเร็จ",
+                    ephemeral=True
+                )
+
             # =====================
-            # 📢 SUCCESS
+            # ✅ SUCCESS
             # =====================
             await interaction.response.send_message(
-                "✅ สั่งซื้อสำเร็จ\n🎫 กำลังเปิด Ticket...",
+                f"✅ สั่งซื้อสำเร็จ\n🆔 Order #{order_id}\n🎫 เปิด Ticket แล้ว",
                 ephemeral=True
             )
 
         except Exception as e:
-            print("[SHOP] modal crash:", e)
+            print("[SHOP ERROR]", e)
 
-            try:
+            if not interaction.response.is_done():
                 await interaction.response.send_message(
                     "❌ ระบบ error กรุณาลองใหม่",
                     ephemeral=True
                 )
-            except:
-                pass
-
-        finally:
-            self._locked = False
