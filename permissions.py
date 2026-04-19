@@ -1,34 +1,33 @@
 import discord
 
+
 # =====================
-# 👑 ADMIN CHECK
+# 👑 ADMIN CHECK (CORE)
 # =====================
 def is_admin(bot, user: discord.Member):
 
     try:
-        admin_role_id = bot.brain.role("ADMIN_ROLE")
+        role_id = bot.brain.role("ADMIN_ROLE")
 
-        if not admin_role_id:
+        if not role_id:
             return False
 
-        return any(role.id == int(admin_role_id) for role in user.roles)
+        return any(r.id == int(role_id) for r in user.roles)
 
     except Exception as e:
-        print("[PERMISSION ERROR] admin check:", e)
+        print("[PERMISSION ERROR]", e)
         return False
 
 
 # =====================
-# 🚫 BLOCK NON-ADMIN (INTERACTION)
+# 🚫 ADMIN ONLY GUARD
 # =====================
 async def admin_only(interaction: discord.Interaction):
 
     if not isinstance(interaction.user, discord.Member):
         return False
 
-    bot = interaction.client
-
-    if is_admin(bot, interaction.user):
+    if is_admin(interaction.client, interaction.user):
         return True
 
     await interaction.response.send_message(
@@ -40,27 +39,36 @@ async def admin_only(interaction: discord.Interaction):
 
 
 # =====================
-# 👁️ HIDE BUTTON FOR NON-ADMIN
+# 🔒 REQUIRE ADMIN (SHORT ALIAS)
+# =====================
+async def require_admin(interaction: discord.Interaction):
+    return await admin_only(interaction)
+
+
+# =====================
+# 👁️ VIEW VISIBILITY (FIXED)
 # =====================
 def hide_for_non_admin(bot, user: discord.Member):
 
     try:
+        # True = show
         return is_admin(bot, user)
     except:
         return False
 
 
 # =====================
-# 🧠 TICKET LIMIT CHECK (1 ACTIVE ONLY)
+# 🎫 TICKET LIMIT (FIXED)
 # =====================
 def can_open_ticket(bot, user_id):
 
     try:
         cur = bot.mem.conn.cursor()
 
+        # FIX: your schema = order_id, channel_id
         cur.execute(
-            "SELECT COUNT(*) FROM tickets WHERE user_id=? AND status='open'",
-            (user_id,)
+            "SELECT COUNT(*) FROM tickets WHERE channel_id=?",
+            (str(user_id),)
         )
 
         count = cur.fetchone()[0]
@@ -70,22 +78,3 @@ def can_open_ticket(bot, user_id):
     except Exception as e:
         print("[PERMISSION ERROR] ticket check:", e)
         return False
-
-
-# =====================
-# 🔒 GUARD WRAPPER (DECORATOR STYLE)
-# =====================
-async def require_admin(interaction: discord.Interaction):
-
-    if not isinstance(interaction.user, discord.Member):
-        return False
-
-    if is_admin(interaction.client, interaction.user):
-        return True
-
-    await interaction.response.send_message(
-        "❌ Admin only",
-        ephemeral=True
-    )
-
-    return False
