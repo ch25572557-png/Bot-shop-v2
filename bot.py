@@ -58,19 +58,19 @@ bot.dashboard = DashboardWorker(bot)
 
 
 # =====================
-# 🚀 READY EVENT (V2 FIXED)
+# 🚀 READY EVENT (FIXED)
 # =====================
 @bot.event
 async def on_ready():
-
-    print(f"🟢 LOGGED IN AS {bot.user}")
 
     if getattr(bot, "ready_done", False):
         return
     bot.ready_done = True
 
+    print(f"🟢 LOGGED IN AS {bot.user}")
+
     # =====================
-    # 🧠 INIT MEMORY V2 (IMPORTANT FIX)
+    # 🧠 MEMORY INIT
     # =====================
     try:
         await bot.mem.init()
@@ -79,40 +79,35 @@ async def on_ready():
         print("[MEM INIT ERROR]", e)
 
     # =====================
-    # 🎛 SAFE VIEW REGISTER
+    # 🎛 PERSISTENT VIEW (FIXED)
     # =====================
-    def safe_add(view_cls, name):
-        try:
-            bot.add_view(view_cls(bot))
-            print(f"✅ {name}")
-        except Exception as e:
-            print(f"❌ {name} ERROR:", e)
-
-    safe_add(ShopView, "ShopView")
-    safe_add(AdminView, "AdminView")
-    safe_add(CancelView, "CancelView")
-    safe_add(StockView, "StockView")
-    safe_add(AdminDashboard, "AdminDashboard")
+    try:
+        bot.add_view(ShopView())
+        bot.add_view(AdminView())
+        bot.add_view(CancelView())
+        bot.add_view(StockView())
+        bot.add_view(AdminDashboard())
+        print("🎛 VIEWS REGISTERED")
+    except Exception as e:
+        print("[VIEW ERROR]", e)
 
     # =====================
-    # 🚀 SAFE START SYSTEMS
+    # 🚀 START SYSTEMS SAFE
     # =====================
-    async def safe_start(name, fn):
+    async def run_maybe_async(fn):
         try:
             result = fn()
-
             if asyncio.iscoroutine(result):
                 await result
-
-            print(f"🚀 {name} STARTED")
-
         except Exception as e:
-            print(f"[{name} ERROR]", e)
+            print("[SYSTEM ERROR]", e)
 
-    await safe_start("STOCK", bot.stock.start)
-    await safe_start("ORDER", bot.order.start)
-    await safe_start("ALERT", bot.stock_alert.start)
-    await safe_start("DASHBOARD", bot.dashboard.start)
+    await run_maybe_async(bot.stock.start)
+    await run_maybe_async(bot.order.start)
+    await run_maybe_async(bot.stock_alert.start)
+    await run_maybe_async(bot.dashboard.start)
+
+    print("🚀 ALL SYSTEMS STARTED")
 
 
 # =====================
@@ -126,7 +121,7 @@ async def shop(ctx):
             description="เลือกสินค้าด้านล่าง",
             color=0x00ffcc
         ),
-        view=ShopView(bot)
+        view=ShopView()
     )
 
 
@@ -137,7 +132,7 @@ async def admin(ctx):
             title="🛠 ADMIN PANEL",
             color=0xffcc00
         ),
-        view=AdminView(bot)
+        view=AdminView()
     )
 
 
@@ -149,24 +144,18 @@ async def dashboard(ctx):
             description="จัดการระบบทั้งหมด",
             color=0x2ecc71
         ),
-        view=AdminDashboard(bot)
+        view=AdminDashboard()
     )
 
 
 # =====================
-# 🚀 RUN BOT
+# 🚀 RUN BOT (RAILWAY SAFE)
 # =====================
-async def main():
+if __name__ == "__main__":
 
     token = os.getenv("DISCORD_TOKEN")
 
     if not token:
         print("❌ Missing DISCORD_TOKEN")
-        return
-
-    async with bot:
-        await bot.start(token)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    else:
+        bot.run(token)
