@@ -1,43 +1,27 @@
 import asyncio
-from utils import safe_send, safe_db_execute
 
 
 class StockAlertSystem:
 
     def __init__(self, bot):
         self.bot = bot
-
         self.running = False
-
-        # 🔥 เก็บ state แบบ smarter
         self.last_state = {}
 
-    # =====================
-    # 🚀 START LOOP
-    # =====================
     def start(self):
         if self.running:
             return
 
         self.running = True
+        self.bot.loop.create_task(self.loop())
+        print("[STOCK ALERT] started (V2)")
 
-        try:
-            self.bot.loop.create_task(self.loop())
-            print("[STOCK ALERT] started")
-
-        except Exception as e:
-            print("[STOCK ALERT START ERROR]", e)
-
-    # =====================
-    # 🔁 MAIN LOOP
-    # =====================
     async def loop(self):
 
         while self.running:
 
             try:
                 await self.check_stock()
-
             except Exception as e:
                 print("[STOCK ALERT LOOP ERROR]", e)
 
@@ -51,7 +35,7 @@ class StockAlertSystem:
             await asyncio.sleep(cooldown)
 
     # =====================
-    # 📦 CHECK STOCK
+    # 📦 CHECK STOCK (🔥 FIX)
     # =====================
     async def check_stock(self):
 
@@ -66,14 +50,10 @@ class StockAlertSystem:
         role_id = self.bot.brain.role("ADMIN_ROLE")
 
         # =====================
-        # 🔥 SAFE CHANNEL FETCH
+        # 🔥 CHANNEL
         # =====================
         try:
-            channel = self.bot.get_channel(int(channel_id)) if channel_id else None
-
-            if not channel:
-                channel = await self.bot.fetch_channel(int(channel_id))
-
+            channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
         except:
             channel = None
 
@@ -82,28 +62,22 @@ class StockAlertSystem:
             return
 
         # =====================
-        # 📦 GET STOCK
+        # 📦 GET STOCK (V2 ONLY)
         # =====================
-        data = safe_db_execute(
-            self.bot.mem.conn,
-            "SELECT name, qty FROM stock"
-        )
-
-        if not data:
+        try:
+            data = await self.bot.mem.get_all_stock()
+        except Exception as e:
+            print("[STOCK FETCH ERROR]", e)
             return
 
         alerts = []
 
         for name, qty in data:
 
-            # =====================
-            # 🔥 STATE CHANGE DETECTION (FIX)
-            # =====================
             prev = self.last_state.get(name)
-
             is_low = qty <= low_limit
 
-            # แจ้งเฉพาะ "เปลี่ยนสถานะ"
+            # แจ้งเฉพาะตอนเปลี่ยนสถานะ
             if prev == is_low:
                 continue
 
@@ -113,7 +87,7 @@ class StockAlertSystem:
                 alerts.append(f"⚠️ {name} เหลือ {qty}")
 
         # =====================
-        # 📢 SEND ALERT
+        # 📢 SEND
         # =====================
         if alerts:
 
@@ -124,10 +98,13 @@ class StockAlertSystem:
                 + "\n".join(alerts)
             )
 
-            await safe_send(channel, content=msg)
+            try:
+                await channel.send(msg)
+            except Exception as e:
+                print("[SEND ERROR]", e)
 
     # =====================
-    # 🔄 RESET (CALL FROM RESTOCK IF WANT)
+    # 🔄 RESET
     # =====================
     def reset_item(self, item):
         self.last_state.pop(item, None)
