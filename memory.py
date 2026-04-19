@@ -9,12 +9,18 @@ class Memory:
         self.db = None
         self.lock = asyncio.Lock()
 
+    # =====================
+    # 🚀 INIT DB
+    # =====================
     async def init(self):
 
         self.db = await aiosqlite.connect(self.db_path)
         await self.db.execute("PRAGMA journal_mode=WAL")
         await self.db.execute("PRAGMA synchronous=NORMAL")
 
+        # =====================
+        # 🛒 ORDERS
+        # =====================
         await self.db.execute("""
         CREATE TABLE IF NOT EXISTS orders(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,6 +32,9 @@ class Memory:
         )
         """)
 
+        # =====================
+        # 📦 STOCK
+        # =====================
         await self.db.execute("""
         CREATE TABLE IF NOT EXISTS stock(
             name TEXT PRIMARY KEY,
@@ -34,6 +43,9 @@ class Memory:
         )
         """)
 
+        # =====================
+        # 💰 POINTS
+        # =====================
         await self.db.execute("""
         CREATE TABLE IF NOT EXISTS points(
             user TEXT PRIMARY KEY,
@@ -41,6 +53,9 @@ class Memory:
         )
         """)
 
+        # =====================
+        # 🎫 TICKETS
+        # =====================
         await self.db.execute("""
         CREATE TABLE IF NOT EXISTS tickets(
             order_id INTEGER PRIMARY KEY,
@@ -50,22 +65,30 @@ class Memory:
 
         await self.db.commit()
 
+    # =====================
+    # ⚙️ EXEC WRAPPER
+    # =====================
     async def execute(self, query, params=(), fetch=False, one=False):
 
         async with self.lock:
             cur = await self.db.execute(query, params)
 
             if fetch:
-                return await cur.fetchall()
+                rows = await cur.fetchall()
+                await cur.close()
+                return rows
 
             if one:
-                return await cur.fetchone()
+                row = await cur.fetchone()
+                await cur.close()
+                return row
 
             await self.db.commit()
-            return cur
+            await cur.close()
+            return None
 
     # =====================
-    # 🛒 ORDER
+    # 🛒 ORDER SYSTEM
     # =====================
     async def add_order(self, user, item, amount=1, roblox_user=None, status="PENDING"):
 
@@ -76,7 +99,7 @@ class Memory:
             (user, item, amount, roblox_user, status)
         )
 
-        return cur.lastrowid
+        return cur.lastrowid if cur else None
 
     async def get_order(self, order_id):
 
@@ -97,7 +120,7 @@ class Memory:
 
         row = await self.execute(
             "SELECT order_id FROM tickets WHERE channel_id=?",
-            (channel_id,),
+            (str(channel_id),),
             one=True
         )
 
@@ -105,19 +128,21 @@ class Memory:
 
     async def get_recent_orders(self):
 
-        return await self.execute(
+        rows = await self.execute(
             "SELECT id,item,amount,status FROM orders ORDER BY id DESC LIMIT 10",
             fetch=True
         )
 
+        return rows or []
+
     # =====================
-    # 🎫 TICKET
+    # 🎫 TICKET SYSTEM
     # =====================
     async def save_ticket(self, order_id, channel_id):
 
         await self.execute(
             "INSERT OR REPLACE INTO tickets(order_id, channel_id) VALUES(?,?)",
-            (order_id, channel_id)
+            (order_id, str(channel_id))
         )
 
     async def get_ticket(self, order_id):
@@ -128,14 +153,16 @@ class Memory:
             one=True
         )
 
-        return row[0] if row else None
+        return int(row[0]) if row and row[0] else None
 
     # =====================
-    # 📦 STOCK (FIXED)
+    # 📦 STOCK SYSTEM (FARM-FRIENDLY)
     # =====================
+
     def _norm(self, item):
         return str(item).strip().lower()
 
+    # ❌ ไม่ block flow แล้ว (V3 concept)
     async def minus_stock(self, item, amount=1):
 
         item = self._norm(item)
@@ -173,7 +200,7 @@ class Memory:
             one=True
         )
 
-        return row[0] if row else 0
+        return int(row[0]) if row and row[0] else 0
 
     async def get_all_stock(self):
 
@@ -182,10 +209,10 @@ class Memory:
             fetch=True
         )
 
-        return rows if rows else []
+        return rows or []
 
     # =====================
-    # 💰 POINTS
+    # 💰 POINT SYSTEM
     # =====================
     async def add_points(self, user, point):
 
@@ -204,4 +231,4 @@ class Memory:
             one=True
         )
 
-        return row[0] if row else 0
+        return int(row[0]) if row else 0
