@@ -1,174 +1,123 @@
-import threading
-import time
-import discord
 import asyncio
+import discord
+
 
 class StockSystem:
-    def __init__(self, mem, bot=None):
+
+    def __init__(self, mem, brain, bot):
         self.mem = mem
+        self.brain = brain
         self.bot = bot
-        self.lock = threading.Lock()
         self.running = False
 
     # =====================
-    # 📦 MINUS STOCK
+    # 📦 MINUS STOCK (ใช้ Memory)
     # =====================
-    def minus(self, item, amount=1):
-
-        try:
-            amount = max(int(amount), 1)
-        except:
-            amount = 1
-
-        try:
-            with self.lock:
-                cur = self.mem.conn.cursor()
-
-                cur.execute(
-                    """
-                    UPDATE stock
-                    SET qty = qty - ?
-                    WHERE name = ? AND qty >= ?
-                    """,
-                    (amount, item, amount)
-                )
-
-                self.mem.conn.commit()
-                return cur.rowcount > 0
-
-        except Exception as e:
-            print("[STOCK] minus error:", e)
-            return False
+    async def minus(self, item, amount=1):
+        return await self.mem.minus_stock(item, amount)
 
     # =====================
     # ➕ ADD STOCK
     # =====================
-    def add(self, name, qty, price):
+    async def add(self, name, qty, price=0):
 
         try:
             name = str(name).strip()
             qty = int(qty)
-            price = float(price)
         except:
             return False
 
-        if not name or qty <= 0 or price < 0:
+        if not name or qty <= 0:
             return False
 
-        try:
-            with self.lock:
-                cur = self.mem.conn.cursor()
-
-                cur.execute(
-                    "SELECT qty FROM stock WHERE name=?",
-                    (name,)
-                )
-                result = cur.fetchone()
-
-                if result:
-                    cur.execute(
-                        """
-                        UPDATE stock
-                        SET qty = qty + ?
-                        WHERE name = ?
-                        """,
-                        (qty, name)
-                    )
-                else:
-                    cur.execute(
-                        """
-                        INSERT INTO stock(name, qty, price)
-                        VALUES(?,?,?)
-                        """,
-                        (name, qty, price)
-                    )
-
-                self.mem.conn.commit()
-                return True
-
-        except Exception as e:
-            print("[STOCK] add error:", e)
-            return False
+        await self.mem.add_stock(name, qty)
+        return True
 
     # =====================
     # 📊 GET STOCK
     # =====================
-    def get(self, item):
-
-        try:
-            with self.lock:
-                cur = self.mem.conn.cursor()
-                cur.execute(
-                    "SELECT qty FROM stock WHERE name=?",
-                    (item,)
-                )
-
-                result = cur.fetchone()
-                return result[0] if result else 0
-
-        except Exception as e:
-            print("[STOCK] get error:", e)
-            return 0
+    async def get(self, item):
+        return await self.mem.get_stock(item)
 
     # =====================
-    # 🚀 START LOOP (IMPORTANT)
+    # 🚀 START LOOP (ASYNC)
     # =====================
     def start(self):
+
         if self.running:
             return
 
         self.running = True
-        thread = threading.Thread(target=self._loop, daemon=True)
-        thread.start()
+        self.bot.loop.create_task(self._loop())
 
-        print("📦 STOCK MONITOR STARTED")
+        print("📦 STOCK MONITOR STARTED (V2)")
 
     # =====================
-    # 🔁 MONITOR LOOP
+    # 🔁 LOOP
     # =====================
-    def _loop(self):
+    async def _loop(self):
+
         while self.running:
             try:
-                with self.lock:
-                    cur = self.mem.conn.cursor()
-                    cur.execute("SELECT name, qty FROM stock")
-                    items = cur.fetchall()
-
-                for name, qty in items:
-
-                    if qty <= 5:
-                        self._notify(name, qty)
-
-                time.sleep(10)
+                await self.check_stock()
+                await asyncio.sleep(10)
 
             except Exception as e:
                 print("[STOCK LOOP ERROR]", e)
-                time.sleep(5)
+                await asyncio.sleep(5)
 
     # =====================
-    # 📢 NOTIFY (EMBED)
+    # 🔍 CHECK STOCK
     # =====================
-    def _notify(self, name, qty):
-        if not self.bot:
+    async def check_stock(self):
+
+        try:
+            # 🔥 ดึงข้อมูลแบบ async
+            async with self.mem.lock:
+                async with self.mem_conn() as db:
+                    cur = await db.execute("SELECT name, qty FROM stock")
+                    items = await cur.fetchall()
+
+        except Exception as e:
+            print("[STOCK FETCH ERROR]", e)
             return
 
-        channel = None
+        for name, qty in items:
+            if qty <= 5:
+                await self.notify(name, qty)
 
-        # หา channel ชื่อ stock-alert
-        for c in self.bot.get_all_channels():
-            if c.name == "stock-alert":
-                channel = c
-                break
+    # =====================
+    # 🔌 DB CONNECT
+    # =====================
+    async def mem_conn(self):
+        import aiosqlite
+        return await aiosqlite.connect(self.mem.db_path)
 
-        if not channel:
-            return
+    # =====================
+    # 📢 NOTIFY (SAFE)
+    # =====================
+    async def notify(self, name, qty):
 
-        embed = discord.Embed(
-            title="📦 Stock Alert",
-            description=f"สินค้า `{name}` ใกล้หมดแล้ว",
-            color=0xffcc00
-        )
+        try:
+            channel_id = self.brain.channel("STOCK_ALERT")
 
-        embed.add_field(name="คงเหลือ", value=str(qty), inline=False)
+            if not channel_id:
+                return
 
-        asyncio.create_task(channel.send(embed=embed))
+            channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
+
+            if not channel:
+                return
+
+            embed = discord.Embed(
+                title="📦 Stock Alert",
+                description=f"สินค้า `{name}` ใกล้หมด",
+                color=0xffcc00
+            )
+
+            embed.add_field(name="คงเหลือ", value=str(qty), inline=False)
+
+            await channel.send(embed=embed)
+
+        except Exception as e:
+            print("[STOCK NOTIFY ERROR]", e)
