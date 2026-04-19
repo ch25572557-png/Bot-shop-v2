@@ -8,10 +8,10 @@ class StatusView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
         self.order_id = order_id
-        self._lock = asyncio.Lock()  # 🔥 กันกดซ้ำ / spam
+        self._lock = asyncio.Lock()
 
     # =====================
-    # 💾 UPDATE STATUS CORE (SAFE V2)
+    # 💾 UPDATE STATUS CORE (FIXED)
     # =====================
     async def send_ticket(self, status):
 
@@ -24,18 +24,16 @@ class StatusView(discord.ui.View):
                 if not channel_id:
                     return
 
-                channel_id = int(str(channel_id))
+                channel_id = int(channel_id)
 
-                channel = self.bot.get_channel(channel_id)
-                if channel is None:
-                    channel = await self.bot.fetch_channel(channel_id)
+                channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
 
-                if channel is None:
+                if not channel:
                     return
 
                 embed = discord.Embed(
                     title="📊 STATUS UPDATE",
-                    description=f"สถานะ: `{status}`",
+                    description=f"Order #{self.order_id}\nสถานะ: `{status}`",
                     color=0x00ffcc
                 )
 
@@ -47,6 +45,12 @@ class StatusView(discord.ui.View):
                 print("[STATUS SEND ERROR]", e)
 
     # =====================
+    # 🔐 PERMISSION CHECK
+    # =====================
+    def is_admin(self, user):
+        return user.guild_permissions.administrator or user.guild_permissions.manage_guild
+
+    # =====================
     # ⏳ WAIT ADMIN
     # =====================
     @discord.ui.button(label="⏳ WAIT ADMIN", style=discord.ButtonStyle.gray, custom_id="wait_admin")
@@ -55,11 +59,9 @@ class StatusView(discord.ui.View):
         if interaction.user.bot:
             return
 
-        await interaction.response.defer(ephemeral=True)
-
         await self.send_ticket("WAIT_ADMIN")
 
-        await interaction.followup.send("✅ WAIT_ADMIN", ephemeral=True)
+        await interaction.response.send_message("✅ WAIT_ADMIN", ephemeral=True)
 
     # =====================
     # 👨‍💼 ACCEPT
@@ -70,11 +72,12 @@ class StatusView(discord.ui.View):
         if interaction.user.bot:
             return
 
-        await interaction.response.defer(ephemeral=True)
+        if not self.is_admin(interaction.user):
+            return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
 
         await self.send_ticket("ADMIN_ACCEPTED")
 
-        await interaction.followup.send("✅ รับออเดอร์แล้ว", ephemeral=True)
+        await interaction.response.send_message("✅ รับออเดอร์แล้ว", ephemeral=True)
 
     # =====================
     # 🪏 FARMING
@@ -85,11 +88,9 @@ class StatusView(discord.ui.View):
         if interaction.user.bot:
             return
 
-        await interaction.response.defer(ephemeral=True)
-
         await self.send_ticket("FARMING")
 
-        await interaction.followup.send("🪏 ฟาร์มแล้ว", ephemeral=True)
+        await interaction.response.send_message("🪏 ฟาร์มแล้ว", ephemeral=True)
 
     # =====================
     # 📦 WAIT CUSTOMER
@@ -100,14 +101,12 @@ class StatusView(discord.ui.View):
         if interaction.user.bot:
             return
 
-        await interaction.response.defer(ephemeral=True)
-
         await self.send_ticket("WAIT_CUSTOMER")
 
-        await interaction.followup.send("📦 รอลูกค้า", ephemeral=True)
+        await interaction.response.send_message("📦 รอลูกค้า", ephemeral=True)
 
     # =====================
-    # ✅ DONE
+    # ✅ DONE (FIXED FLOW)
     # =====================
     @discord.ui.button(label="✅ DONE", style=discord.ButtonStyle.green, custom_id="done")
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -115,12 +114,12 @@ class StatusView(discord.ui.View):
         if interaction.user.bot:
             return
 
+        if not self.is_admin(interaction.user):
+            return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
+
         await interaction.response.defer(ephemeral=True)
 
         try:
-            if not interaction.channel:
-                return await interaction.followup.send("❌ ไม่พบ channel", ephemeral=True)
-
             success = await self.bot.order.complete(interaction.channel)
 
             if success:
