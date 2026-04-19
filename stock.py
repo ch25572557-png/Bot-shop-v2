@@ -4,10 +4,11 @@ import discord
 
 class StockSystem:
 
-    def __init__(self, mem, brain, bot):
+    def __init__(self, mem, brain, bot, notify):
         self.mem = mem
         self.brain = brain
         self.bot = bot
+        self.notify = notify  # 🔥 FIX สำคัญ
         self.running = False
 
     # =====================
@@ -23,7 +24,7 @@ class StockSystem:
     async def add(self, name, qty, price=0):
 
         try:
-            name = str(name).strip().lower()  # 🔥 FIX สำคัญ
+            name = str(name).strip().lower()
             qty = int(qty)
         except:
             return False
@@ -42,7 +43,7 @@ class StockSystem:
         return await self.mem.get_stock(item)
 
     # =====================
-    # 🚀 START LOOP (FIXED PROPER)
+    # 🚀 START LOOP (FIXED)
     # =====================
     def start(self):
 
@@ -51,8 +52,8 @@ class StockSystem:
 
         self.running = True
 
-        # 🔥 FIX: ใช้ bot loop ที่แน่ใจว่ามี event loop แล้ว
-        self.bot.loop.create_task(self._loop())
+        # 🔥 FIX: safe async task
+        asyncio.create_task(self._loop())
 
         print("📦 STOCK MONITOR STARTED")
 
@@ -61,7 +62,7 @@ class StockSystem:
     # =====================
     async def _loop(self):
 
-        await self.bot.wait_until_ready()  # 🔥 FIX สำคัญมาก
+        await self.bot.wait_until_ready()
 
         while self.running:
             try:
@@ -83,18 +84,17 @@ class StockSystem:
             print("[STOCK FETCH ERROR]", e)
             return
 
-        # 🔥 FIX: กัน None
         if not items:
             return
 
         for name, qty in items:
             if qty <= 5:
-                await self.notify(name, qty)
+                await self.notify_low_stock(name, qty)
 
     # =====================
-    # 📢 NOTIFY
+    # 📢 NOTIFY (FIXED NAME)
     # =====================
-    async def notify(self, name, qty):
+    async def notify_low_stock(self, name, qty):
 
         try:
             channel_id = self.brain.channel("STOCK_ALERT")
@@ -103,9 +103,7 @@ class StockSystem:
 
             channel_id = int(channel_id)
 
-            channel = self.bot.get_channel(channel_id)
-            if channel is None:
-                channel = await self.bot.fetch_channel(channel_id)
+            channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
 
             if not channel:
                 return
@@ -118,6 +116,7 @@ class StockSystem:
 
             embed.add_field(name="คงเหลือ", value=str(qty), inline=False)
 
+            await self.notify.stock_alert(name, qty)  # 🔥 ใช้ระบบ notify จริง
             await channel.send(embed=embed)
 
         except Exception as e:
