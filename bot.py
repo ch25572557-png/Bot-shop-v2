@@ -37,12 +37,17 @@ bot.mem = Memory()
 
 
 # =====================
-# 📦 SYSTEMS
+# 📦 SYSTEMS (FIXED)
 # =====================
-bot.stock = StockSystem(bot.mem, bot.brain, bot)
+bot.stock = StockSystem(bot.mem, bot.brain, bot, None)  
+# ⚠️ notify ใส่ทีหลังด้านล่าง
+
 bot.ticket = TicketSystem(bot.brain, bot)
 bot.notify = NotifySystem(bot.brain, bot)
 bot.backup = BackupSystem(bot.brain, bot)
+
+# 🔥 FIX: inject notify เข้า stock
+bot.stock.notify = bot.notify
 
 bot.order = OrderSystem(
     bot.mem,
@@ -79,7 +84,7 @@ async def on_ready():
         print("[MEM INIT ERROR]", e)
 
     # =====================
-    # 🎛 PERSISTENT VIEW (FIXED)
+    # 🎛 VIEWS
     # =====================
     try:
         bot.add_view(ShopView(bot))
@@ -94,7 +99,7 @@ async def on_ready():
     # =====================
     # 🚀 START SYSTEMS SAFE
     # =====================
-    async def run_maybe_async(fn):
+    async def run(fn):
         try:
             result = fn()
             if asyncio.iscoroutine(result):
@@ -102,10 +107,10 @@ async def on_ready():
         except Exception as e:
             print("[SYSTEM ERROR]", e)
 
-    await run_maybe_async(bot.stock.start)
-    await run_maybe_async(bot.order.start)
-    await run_maybe_async(bot.stock_alert.start)
-    await run_maybe_async(bot.dashboard.start)
+    await run(bot.stock.start)
+    await run(bot.order.start)
+    await run(bot.stock_alert.start)
+    await run(bot.dashboard.start)
 
     print("🚀 ALL SYSTEMS STARTED")
 
