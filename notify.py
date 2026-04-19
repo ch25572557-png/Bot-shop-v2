@@ -8,18 +8,24 @@ class NotifySystem:
         self.bot = bot
 
     # =====================
-    # 🔧 GET CHANNEL (SAFE + FETCH)
+    # 🔧 GET CHANNEL (FULL SAFE FIX)
     # =====================
     async def _get_channel(self):
 
         try:
-            ch_id = self.brain.channel("ORDER_NOTIFY")  # 🔥 FIX ใช้ key เดียวทั้งระบบ
+            ch_id = self.brain.channel("ORDER_NOTIFY")
             if not ch_id:
+                return None
+
+            # 🔥 FIX: force int
+            try:
+                ch_id = int(ch_id)
+            except:
                 return None
 
             channel = self.bot.get_channel(ch_id)
 
-            if not channel:
+            if channel is None:
                 channel = await self.bot.fetch_channel(ch_id)
 
             return channel
@@ -64,7 +70,12 @@ class NotifySystem:
                     inline=False
                 )
 
-            content = f"<@&{role_id}>" if role_id else None
+            content = None
+            if role_id:
+                try:
+                    content = f"<@&{int(role_id)}>"
+                except:
+                    content = None
 
             await ch.send(content=content, embed=embed)
 
@@ -130,7 +141,12 @@ class NotifySystem:
             embed.add_field(name="📦 Item", value=item, inline=False)
             embed.add_field(name="📉 Remaining", value=str(qty), inline=False)
 
-            content = f"<@&{role_id}>" if role_id else None
+            content = None
+            if role_id:
+                try:
+                    content = f"<@&{int(role_id)}>"
+                except:
+                    content = None
 
             await ch.send(content=content, embed=embed)
 
