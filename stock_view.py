@@ -30,8 +30,10 @@ class RestockModal(discord.ui.Modal):
                     ephemeral=True
                 )
 
-            # 🔥 ใช้ memory layer
-            self.bot.mem.add_stock(self.item, qty)
+            # =====================
+            # 🔥 MEMORY V2 ONLY
+            # =====================
+            await self.bot.mem.add_stock(self.item, qty)
 
             await interaction.response.send_message(
                 f"✅ เติมสต๊อก: {self.item} +{qty}",
@@ -46,24 +48,29 @@ class RestockModal(discord.ui.Modal):
 
 
 # =====================
-# 📦 SELECT ITEM (🔥 FIX PERSISTENT)
+# 📦 SELECT ITEM (V2 FIXED)
 # =====================
 class StockSelect(discord.ui.Select):
 
     def __init__(self, bot):
         self.bot = bot
 
+        options = []
+
+        # =====================
+        # 🔥 MEMORY V2 FETCH
+        # =====================
         try:
-            cur = bot.mem.conn.cursor()
-            cur.execute("SELECT name FROM stock")
-            items = cur.fetchall()
+            # ต้องเพิ่มฟังก์ชันนี้ใน Memory V2:
+            # async def get_all_stock(self)
+            items = asyncio.run(self._get_items_safe())
         except:
             items = []
 
-        options = [
-            discord.SelectOption(label=i[0], value=i[0])
-            for i in items[:25]
-        ]
+        for name in items[:25]:
+            options.append(
+                discord.SelectOption(label=name, value=name)
+            )
 
         if not options:
             options = [
@@ -76,10 +83,14 @@ class StockSelect(discord.ui.Select):
         super().__init__(
             placeholder="📦 เลือกสินค้า",
             options=options,
-            custom_id="stock_select_main",  # 🔥 สำคัญสุด
+            custom_id="stock_select_main",
             min_values=1,
             max_values=1
         )
+
+    async def _get_items_safe(self):
+        data = await self.bot.mem.get_all_stock()
+        return [i[0] for i in data]
 
     async def callback(self, interaction: discord.Interaction):
 
