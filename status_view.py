@@ -1,4 +1,5 @@
 import discord
+import asyncio
 
 
 class StatusView(discord.ui.View):
@@ -7,42 +8,52 @@ class StatusView(discord.ui.View):
         super().__init__(timeout=None)
         self.bot = bot
         self.order_id = order_id
+        self._lock = asyncio.Lock()  # 🔥 กันกดซ้ำ / spam
 
     # =====================
-    # 💾 UPDATE STATUS CORE (V2 FIX)
+    # 💾 UPDATE STATUS CORE (SAFE V2)
     # =====================
     async def send_ticket(self, status):
 
-        await self.bot.mem.update_order_status(self.order_id, status)
+        async with self._lock:
 
-        try:
-            channel_id = await self.bot.mem.get_ticket(self.order_id)
+            try:
+                await self.bot.mem.update_order_status(self.order_id, status)
 
-            if not channel_id:
-                return
+                channel_id = await self.bot.mem.get_ticket(self.order_id)
+                if not channel_id:
+                    return
 
-            channel_id = int(channel_id)
+                channel_id = int(str(channel_id))
 
-            channel = self.bot.get_channel(channel_id)
-            if channel is None:
-                channel = await self.bot.fetch_channel(channel_id)
+                channel = self.bot.get_channel(channel_id)
+                if channel is None:
+                    channel = await self.bot.fetch_channel(channel_id)
 
-            embed = discord.Embed(
-                title="📊 STATUS UPDATE",
-                description=f"สถานะ: `{status}`",
-                color=0x00ffcc
-            )
+                if channel is None:
+                    return
 
-            await channel.send(embed=embed)
+                embed = discord.Embed(
+                    title="📊 STATUS UPDATE",
+                    description=f"สถานะ: `{status}`",
+                    color=0x00ffcc
+                )
 
-        except Exception as e:
-            print("[STATUS SEND ERROR]", e)
+                await channel.send(embed=embed)
+
+                print(f"[STATUS] {self.order_id} -> {status}")
+
+            except Exception as e:
+                print("[STATUS SEND ERROR]", e)
 
     # =====================
     # ⏳ WAIT ADMIN
     # =====================
     @discord.ui.button(label="⏳ WAIT ADMIN", style=discord.ButtonStyle.gray, custom_id="wait_admin")
     async def wait_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if interaction.user.bot:
+            return
 
         await interaction.response.defer(ephemeral=True)
 
@@ -56,6 +67,9 @@ class StatusView(discord.ui.View):
     @discord.ui.button(label="👨‍💼 ACCEPT", style=discord.ButtonStyle.green, custom_id="admin_accept")
     async def admin_accept(self, interaction: discord.Interaction, button: discord.ui.Button):
 
+        if interaction.user.bot:
+            return
+
         await interaction.response.defer(ephemeral=True)
 
         await self.send_ticket("ADMIN_ACCEPTED")
@@ -67,6 +81,9 @@ class StatusView(discord.ui.View):
     # =====================
     @discord.ui.button(label="🪏 FARMING", style=discord.ButtonStyle.blurple, custom_id="farming")
     async def farming(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if interaction.user.bot:
+            return
 
         await interaction.response.defer(ephemeral=True)
 
@@ -80,6 +97,9 @@ class StatusView(discord.ui.View):
     @discord.ui.button(label="📦 WAIT CUSTOMER", style=discord.ButtonStyle.gray, custom_id="wait_customer")
     async def waiting_customer(self, interaction: discord.Interaction, button: discord.ui.Button):
 
+        if interaction.user.bot:
+            return
+
         await interaction.response.defer(ephemeral=True)
 
         await self.send_ticket("WAIT_CUSTOMER")
@@ -91,6 +111,9 @@ class StatusView(discord.ui.View):
     # =====================
     @discord.ui.button(label="✅ DONE", style=discord.ButtonStyle.green, custom_id="done")
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if interaction.user.bot:
+            return
 
         await interaction.response.defer(ephemeral=True)
 
