@@ -107,15 +107,19 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # ✅ COMPLETE ORDER
+    # ✅ COMPLETE ORDER (FIXED)
     # =====================
     async def complete(self, channel):
 
+        print(f"[DEBUG] complete() called for channel {channel.id}")
+
         order_id = self.mem.get_order_by_channel(str(channel.id))
         if not order_id:
+            print("[DEBUG] No order found for this channel")
             return False
 
         if order_id in self.processing:
+            print("[DEBUG] Already processing order")
             return False
 
         self.processing.add(order_id)
@@ -123,15 +127,17 @@ class OrderSystem:
         try:
             data = self.mem.get_order(order_id)
             if not data:
+                print("[DEBUG] Order data not found")
                 return False
 
             user, item, amount, roblox_user, status = data
 
             if status == "DONE":
+                print("[DEBUG] Order already DONE")
                 return False
 
             # =====================
-            # 🔥 STOCK DEDUCT (SAFE)
+            # 🔥 STOCK DEDUCT
             # =====================
             success = self.mem.minus_stock(item, amount)
 
@@ -172,14 +178,33 @@ class OrderSystem:
             await channel.send(embed=embed)
 
             # =====================
-            # CLOSE CHANNEL (SAFE)
+            # 🔒 CLOSE CHANNEL (FIXED REAL)
             # =====================
             await asyncio.sleep(2)
 
             try:
-                await channel.delete(reason="Order completed")
+                print(f"[DEBUG] Trying to delete channel {channel.id}")
+
+                fresh_channel = self.bot.get_channel(channel.id)
+
+                if not fresh_channel:
+                    fresh_channel = await self.bot.fetch_channel(channel.id)
+
+                if not fresh_channel:
+                    print("[CLOSE ERROR] Channel not found")
+                    return False
+
+                await fresh_channel.delete(reason="Order completed")
+                print(f"[SUCCESS] Channel {channel.id} deleted")
+
+            except discord.Forbidden:
+                print("[CLOSE ERROR] Missing permission: Manage Channels")
+
+            except discord.NotFound:
+                print("[CLOSE ERROR] Channel already deleted")
+
             except Exception as e:
-                print("[CHANNEL DELETE ERROR]", e)
+                print("[CLOSE ERROR]", e)
 
             return True
 
