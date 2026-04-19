@@ -14,6 +14,7 @@ class StockSystem:
     # 📦 MINUS STOCK
     # =====================
     async def minus(self, item, amount=1):
+        item = str(item).strip().lower()
         return await self.mem.minus_stock(item, amount)
 
     # =====================
@@ -22,7 +23,7 @@ class StockSystem:
     async def add(self, name, qty, price=0):
 
         try:
-            name = str(name).strip()
+            name = str(name).strip().lower()  # 🔥 FIX สำคัญ
             qty = int(qty)
         except:
             return False
@@ -37,10 +38,11 @@ class StockSystem:
     # 📊 GET STOCK
     # =====================
     async def get(self, item):
+        item = str(item).strip().lower()
         return await self.mem.get_stock(item)
 
     # =====================
-    # 🚀 START LOOP (FIXED)
+    # 🚀 START LOOP (FIXED PROPER)
     # =====================
     def start(self):
 
@@ -49,15 +51,17 @@ class StockSystem:
 
         self.running = True
 
-        # ✅ FIX: discord.py v2 ห้ามใช้ bot.loop ตรง ๆ
-        asyncio.create_task(self._loop())
+        # 🔥 FIX: ใช้ bot loop ที่แน่ใจว่ามี event loop แล้ว
+        self.bot.loop.create_task(self._loop())
 
-        print("📦 STOCK MONITOR STARTED (V2 FIXED)")
+        print("📦 STOCK MONITOR STARTED")
 
     # =====================
     # 🔁 LOOP
     # =====================
     async def _loop(self):
+
+        await self.bot.wait_until_ready()  # 🔥 FIX สำคัญมาก
 
         while self.running:
             try:
@@ -75,9 +79,12 @@ class StockSystem:
 
         try:
             items = await self.mem.get_all_stock()
-
         except Exception as e:
             print("[STOCK FETCH ERROR]", e)
+            return
+
+        # 🔥 FIX: กัน None
+        if not items:
             return
 
         for name, qty in items:
@@ -91,9 +98,10 @@ class StockSystem:
 
         try:
             channel_id = self.brain.channel("STOCK_ALERT")
-
             if not channel_id:
                 return
+
+            channel_id = int(channel_id)
 
             channel = self.bot.get_channel(channel_id)
             if channel is None:
