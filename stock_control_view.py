@@ -1,6 +1,7 @@
 import discord
 from permissions import admin_only
 
+
 # =====================
 # 📦 MODAL (+/- AMOUNT)
 # =====================
@@ -31,30 +32,29 @@ class StockAmountModal(discord.ui.Modal):
                     ephemeral=True
                 )
 
-            cur = self.bot.mem.conn.cursor()
-
+            # =====================
+            # ➕ ADD STOCK
+            # =====================
             if self.mode == "add":
-                cur.execute(
-                    "UPDATE stock SET qty = qty + ? WHERE name=?",
-                    (qty, self.item)
-                )
+
+                await self.bot.mem.add_stock(self.item, qty)
+
                 msg = f"✅ เพิ่ม {self.item} +{qty}"
 
+            # =====================
+            # ➖ REMOVE STOCK
+            # =====================
             else:
-                cur.execute(
-                    "UPDATE stock SET qty = qty - ? WHERE name=? AND qty >= ?",
-                    (qty, self.item, qty)
-                )
 
-                if cur.rowcount == 0:
+                success = await self.bot.mem.minus_stock(self.item, qty)
+
+                if not success:
                     return await interaction.response.send_message(
                         "❌ สต๊อกไม่พอ",
                         ephemeral=True
                     )
 
                 msg = f"⚠️ ลด {self.item} -{qty}"
-
-            self.bot.mem.conn.commit()
 
             await interaction.response.send_message(msg, ephemeral=True)
 
@@ -71,11 +71,10 @@ class StockAmountModal(discord.ui.Modal):
 class StockControlView(discord.ui.View):
 
     def __init__(self, bot, item):
-        super().__init__(timeout=None)  # 🔥 FIX: ไม่ให้ view ตาย
+        super().__init__(timeout=None)
         self.bot = bot
         self.item = item
 
-    # 🔥 FIX: กันคนไม่ใช่แอด
     async def interaction_check(self, interaction: discord.Interaction):
         return await admin_only(interaction)
 
