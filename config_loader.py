@@ -1,11 +1,15 @@
 import json
 import os
+import threading
+
 
 class ConfigLoader:
 
     def __init__(self, path="config.json"):
         self.path = path
         self.config = {}
+        self._lock = threading.RLock()
+        self.version = 0
         self.load()
 
     # =====================
@@ -19,9 +23,13 @@ class ConfigLoader:
                 return
 
             with open(self.path, "r", encoding="utf-8") as f:
-                self.config = json.load(f)
+                data = json.load(f)
 
-            print("[CONFIG] ✅ Loaded successfully")
+            with self._lock:
+                self.config = data
+                self.version += 1
+
+            print(f"[CONFIG] ✅ Loaded v{self.version}")
 
         except Exception as e:
             print(f"[CONFIG] ❌ Load error: {e}")
@@ -34,7 +42,7 @@ class ConfigLoader:
         self.load()
 
     # =====================
-    # 🔎 SAFE GET (สำคัญสุด)
+    # 🔎 SAFE GET (ROBUST)
     # =====================
     def get(self, path, default=None):
         try:
@@ -42,6 +50,13 @@ class ConfigLoader:
             data = self.config
 
             for k in keys:
+
+                if not isinstance(data, dict):
+                    return default
+
+                if k not in data:
+                    return default
+
                 data = data[k]
 
             return data
@@ -66,3 +81,9 @@ class ConfigLoader:
     # =====================
     def get_setting(self, key, default=None):
         return self.get(f"SETTINGS.{key}", default)
+
+    # =====================
+    # 🔢 VERSION
+    # =====================
+    def get_version(self):
+        return self.version
