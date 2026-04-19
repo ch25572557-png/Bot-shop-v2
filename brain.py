@@ -1,3 +1,5 @@
+import threading
+
 class Brain:
 
     def __init__(self):
@@ -9,7 +11,7 @@ class Brain:
     # 🔄 RELOAD CONFIG
     # =====================
     def reload(self):
-        self.config.reload()  # 🔥 ไม่ต้อง lock ซ้อน
+        self.config.reload()
         with self._lock:
             self._version += 1
             print(f"[BRAIN] config reloaded v{self._version}")
@@ -22,7 +24,7 @@ class Brain:
             return self.config.get(path, default)
 
     # =====================
-    # 🔐 CHANNEL (FIX)
+    # 🔐 CHANNEL
     # =====================
     def channel(self, key):
         with self._lock:
@@ -39,7 +41,7 @@ class Brain:
             return None
 
     # =====================
-    # 👑 ROLE (FIX)
+    # 👑 ROLE
     # =====================
     def role(self, key):
         with self._lock:
