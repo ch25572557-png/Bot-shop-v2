@@ -28,12 +28,12 @@ class OrderSystem:
         asyncio.create_task(self.farm_worker())
 
     # =====================
-    # 📢 ADMIN SEND (FIX KEY)
+    # 📢 ADMIN SEND
     # =====================
     async def send_admin(self, title, desc, color=0x00ffcc):
 
         try:
-            ch_id = self.brain.channel("ORDER_NOTIFY")  # 🔥 FIX
+            ch_id = self.brain.channel("ORDER_NOTIFY")
             if not ch_id:
                 return
 
@@ -51,12 +51,12 @@ class OrderSystem:
             print("[ADMIN SEND ERROR]", e)
 
     # =====================
-    # 📢 TICKET UPDATE
+    # 📢 TICKET UPDATE (FIXED AWAIT)
     # =====================
     async def send_ticket(self, order_id, msg):
 
         try:
-            channel_id = self.mem.get_ticket(order_id)
+            channel_id = await self.mem.get_ticket(order_id)  # 🔥 FIX
             if not channel_id:
                 return
 
@@ -74,7 +74,7 @@ class OrderSystem:
             print("[TICKET ERROR]", e)
 
     # =====================
-    # 🛒 CREATE ORDER
+    # 🛒 CREATE ORDER (FIXED)
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
@@ -83,9 +83,10 @@ class OrderSystem:
         except:
             amount = 1
 
-        order_id = self.mem.add_order(
+        # 🔥 FIX: await
+        order_id = await self.mem.add_order(
             str(user),
-            item,
+            item.lower(),
             amount,
             roblox_user,
             "PENDING"
@@ -94,74 +95,65 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # 🔥 ใช้ notify ตัวเดียวพอ (ไม่ต้อง send_admin ซ้ำ)
         await self.notify.admin(user, item, order_id)
-
         await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
         await self.ticket.create(guild, user, order_id)
 
         return order_id
 
     # =====================
-    # ✅ COMPLETE ORDER (FINAL FIX)
+    # ✅ COMPLETE ORDER (FIXED)
     # =====================
     async def complete(self, channel):
 
         print(f"[DEBUG] complete() called for channel {channel.id}")
 
-        order_id = self.mem.get_order_by_channel(str(channel.id))
+        order_id = await self.mem.get_order_by_channel(str(channel.id))  # 🔥 FIX
         if not order_id:
             print("[DEBUG] No order found")
             return False
 
         if order_id in self.processing:
-            print("[DEBUG] Already processing")
             return False
 
         self.processing.add(order_id)
 
         try:
-            data = self.mem.get_order(order_id)
+            data = await self.mem.get_order(order_id)  # 🔥 FIX
             if not data:
-                print("[DEBUG] Order not found")
                 return False
 
             user, item, amount, roblox_user, status = data
 
             if status == "DONE":
-                print("[DEBUG] Already DONE")
                 return False
 
             # =====================
-            # 🔥 STOCK
+            # 🔥 STOCK FIX
             # =====================
-            if not self.mem.minus_stock(item, amount):
+            ok = await self.mem.minus_stock(item, amount)
+
+            if not ok:
                 await channel.send("❌ สต๊อกไม่พอ")
                 return False
 
             # =====================
-            # STATUS
+            # UPDATE ORDER
             # =====================
-            self.mem.update_order_status(order_id, "DONE")
+            await self.mem.update_order_status(order_id, "DONE")
 
             point = int(self.brain.setting("POINT_PER_ORDER", 0))
-            self.mem.add_points(user, point)
+            await self.mem.add_points(user, point)
 
             # =====================
-            # NOTIFY (🔥 FIX)
+            # NOTIFY
             # =====================
             await self.notify.complete(user, item, order_id)
 
             await self.backup.complete(order_id, user, item)
 
-            # =====================
-            # TICKET
-            # =====================
             await self.send_ticket(order_id, "✅ ส่งของเสร็จแล้ว")
 
-            # =====================
-            # USER
-            # =====================
             await channel.send(
                 embed=discord.Embed(
                     title="✅ DONE",
@@ -170,29 +162,12 @@ class OrderSystem:
                 )
             )
 
-            # =====================
-            # 🔒 DELETE CHANNEL (ULTRA SAFE)
-            # =====================
             await asyncio.sleep(2)
 
             try:
-                fresh = self.bot.get_channel(channel.id)
-
-                if not fresh:
-                    fresh = await self.bot.fetch_channel(channel.id)
-
-                if not fresh:
-                    print("[DELETE] channel missing")
-                    return False
-
-                await fresh.delete(reason=f"Order #{order_id} completed")
-                print(f"[SUCCESS] deleted {channel.id}")
-
-            except discord.Forbidden:
-                print("[DELETE ERROR] ไม่มี permission (Manage Channels)")
-
-            except discord.NotFound:
-                print("[DELETE ERROR] channel หายไปแล้ว")
+                fresh = self.bot.get_channel(channel.id) or await self.bot.fetch_channel(channel.id)
+                if fresh:
+                    await fresh.delete(reason=f"Order #{order_id} completed")
 
             except Exception as e:
                 print("[DELETE ERROR]", e)
@@ -212,7 +187,7 @@ class OrderSystem:
                 task = await self.farm_queue.get()
                 await asyncio.sleep(2)
 
-                self.mem.add_stock(task["item"], task["amount"])
+                await self.mem.add_stock(task["item"], task["amount"])  # 🔥 FIX
 
             except Exception as e:
                 print("[FARM ERROR]", e)
