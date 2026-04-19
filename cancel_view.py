@@ -1,9 +1,7 @@
 import discord
+import asyncio
 
 
-# =====================
-# ❌ CANCEL SELECT
-# =====================
 class CancelSelect(discord.ui.Select):
 
     def __init__(self, bot):
@@ -21,13 +19,11 @@ class CancelSelect(discord.ui.Select):
                 LIMIT 25
             """)
             orders = cur.fetchall()
-
         except Exception as e:
             print("[CANCEL DB ERROR]", e)
             orders = []
 
         for o in orders:
-
             options.append(
                 discord.SelectOption(
                     label=f"#{o[0]} | {o[1]} x{o[2]}",
@@ -51,34 +47,27 @@ class CancelSelect(discord.ui.Select):
 
     async def callback(self, interaction: discord.Interaction):
 
-        order_id = self.values[0]
+        if not interaction.response.is_done():
+            await interaction.response.defer(ephemeral=True)
 
-        if order_id == "none":
-            return await interaction.response.send_message(
-                "❌ ไม่มีออเดอร์",
-                ephemeral=True
-            )
+        raw_id = self.values[0]
+
+        if raw_id == "none":
+            return await interaction.followup.send("❌ ไม่มีออเดอร์", ephemeral=True)
 
         try:
+            order_id = int(raw_id)
+
             data = self.bot.mem.get_order(order_id)
 
             if not data:
-                return await interaction.response.send_message(
-                    "❌ ไม่พบออเดอร์",
-                    ephemeral=True
-                )
+                return await interaction.followup.send("❌ ไม่พบออเดอร์", ephemeral=True)
 
             user, item, amount, roblox_user, status = data
 
-            if status == "DONE":
-                return await interaction.response.send_message(
-                    "❌ ออเดอร์เสร็จแล้ว",
-                    ephemeral=True
-                )
-
-            if status == "CANCELLED":
-                return await interaction.response.send_message(
-                    "❌ ถูกยกเลิกแล้ว",
+            if status in ["DONE", "CANCELLED"]:
+                return await interaction.followup.send(
+                    "❌ ออเดอร์นี้ใช้งานไม่ได้แล้ว",
                     ephemeral=True
                 )
 
@@ -88,12 +77,12 @@ class CancelSelect(discord.ui.Select):
             self.bot.mem.update_order_status(order_id, "CANCELLED")
 
             # =====================
-            # 🔁 RETURN STOCK (SAFE SINGLE SOURCE)
+            # 🔁 RETURN STOCK
             # =====================
             self.bot.mem.add_stock(item, amount)
 
             # =====================
-            # 🎫 DELETE TICKET CHANNEL
+            # 🎫 DELETE CHANNEL (FIXED)
             # =====================
             try:
                 channel_id = self.bot.mem.get_ticket(order_id)
@@ -101,10 +90,16 @@ class CancelSelect(discord.ui.Select):
                 if channel_id:
                     channel = self.bot.get_channel(int(channel_id))
 
+                    # 🔥 fallback (สำคัญมาก)
+                    if not channel:
+                        try:
+                            channel = await self.bot.fetch_channel(int(channel_id))
+                        except:
+                            channel = None
+
                     if channel:
                         await channel.send("❌ ออเดอร์ถูกยกเลิก กำลังปิดห้อง...")
-                        await discord.utils.sleep_until(discord.utils.utcnow())
-
+                        await asyncio.sleep(2)
                         await channel.delete(reason="Order cancelled")
 
             except Exception as e:
@@ -115,34 +110,33 @@ class CancelSelect(discord.ui.Select):
             # =====================
             try:
                 channel_id = self.bot.brain.channel("ORDER_NOTIFY")
-                channel = self.bot.get_channel(int(channel_id)) if channel_id else None
 
-                if channel:
-                    embed = discord.Embed(
-                        title="❌ ORDER CANCELLED",
-                        description=f"Order #{order_id}\n{item} x{amount}",
-                        color=0xff0000
-                    )
-                    await channel.send(embed=embed)
+                if channel_id:
+                    ch = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
+
+                    if ch:
+                        embed = discord.Embed(
+                            title="❌ ORDER CANCELLED",
+                            description=f"Order #{order_id}\n{item} x{amount}",
+                            color=0xff0000
+                        )
+                        await ch.send(embed=embed)
 
             except Exception as e:
                 print("[NOTIFY ERROR]", e)
 
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"✅ ยกเลิกออเดอร์ #{order_id} แล้ว",
                 ephemeral=True
             )
 
         except Exception as e:
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f"❌ error: {e}",
                 ephemeral=True
             )
 
 
-# =====================
-# ❌ VIEW
-# =====================
 class CancelView(discord.ui.View):
 
     def __init__(self, bot):
