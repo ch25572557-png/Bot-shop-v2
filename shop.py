@@ -2,7 +2,7 @@ import discord
 
 
 # =====================
-# 🛒 SHOP VIEW (FIXED)
+# 🛒 SHOP VIEW
 # =====================
 class ShopView(discord.ui.View):
 
@@ -21,7 +21,7 @@ class ShopView(discord.ui.View):
 
 
 # =====================
-# 🧾 ORDER MODAL (FIXED)
+# 🧾 ORDER MODAL (FIXED FOR FARM SHOP)
 # =====================
 class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
 
@@ -37,7 +37,7 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
 
         try:
             # =====================
-            # 📦 NORMALIZE ITEM
+            # 📦 ITEM
             # =====================
             item = self.item.value.strip().lower()
 
@@ -58,29 +58,14 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
                 amount = 1
 
             # =====================
-            # 🔍 STOCK FIX (🔥 สำคัญมาก)
-            # =====================
-            stock = await self.bot.mem.get_stock(item)
-
-            if stock <= 0:
-                return await interaction.response.send_message(
-                    f"❌ สินค้า '{item}' หมด",
-                    ephemeral=True
-                )
-
-            if amount > stock:
-                return await interaction.response.send_message(
-                    f"❌ สต๊อกมีแค่ {stock}",
-                    ephemeral=True
-                )
-
-            # =====================
             # 🎮 ROBLOX USER
             # =====================
             roblox_user = self.roblox_user.value.strip() or None
 
+            # ❌ ไม่เช็ค stock (ร้านรับฟาร์ม)
+
             # =====================
-            # 🛒 CREATE ORDER (FIXED CALL)
+            # 🛒 CREATE ORDER
             # =====================
             order_id = await self.bot.mem.add_order(
                 interaction.user.name,
@@ -97,13 +82,12 @@ class OrderModal(discord.ui.Modal, title="🛒 สั่งสินค้า"):
                 )
 
             # =====================
-            # 🎫 CREATE TICKET (IMPORTANT FIX)
+            # 🎫 CREATE TICKET (FIXED)
             # =====================
             await self.bot.ticket.create(
                 interaction.guild,
                 interaction.user,
-                order_id,
-                interaction
+                order_id
             )
 
             # =====================
