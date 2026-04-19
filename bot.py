@@ -53,13 +53,12 @@ bot.order = OrderSystem(
     bot
 )
 
-# 🆕 SYSTEMS
 bot.stock_alert = StockAlertSystem(bot)
 bot.dashboard = DashboardWorker(bot)
 
 
 # =====================
-# 🚀 READY EVENT
+# 🚀 READY EVENT (V2 FIXED)
 # =====================
 @bot.event
 async def on_ready():
@@ -70,6 +69,14 @@ async def on_ready():
         return
     bot.ready_done = True
 
+    # =====================
+    # 🧠 INIT MEMORY V2 (IMPORTANT FIX)
+    # =====================
+    try:
+        await bot.mem.init()
+        print("🧠 MEMORY INIT DONE")
+    except Exception as e:
+        print("[MEM INIT ERROR]", e)
 
     # =====================
     # 🎛 SAFE VIEW REGISTER
@@ -87,19 +94,20 @@ async def on_ready():
     safe_add(StockView, "StockView")
     safe_add(AdminDashboard, "AdminDashboard")
 
-
     # =====================
-    # 🚀 START SYSTEMS (ASYNC SAFE FIX)
+    # 🚀 SAFE START SYSTEMS
     # =====================
     async def safe_start(name, fn):
         try:
             result = fn()
+
             if asyncio.iscoroutine(result):
                 await result
+
             print(f"🚀 {name} STARTED")
+
         except Exception as e:
             print(f"[{name} ERROR]", e)
-
 
     await safe_start("STOCK", bot.stock.start)
     await safe_start("ORDER", bot.order.start)
@@ -148,9 +156,17 @@ async def dashboard(ctx):
 # =====================
 # 🚀 RUN BOT
 # =====================
-token = os.getenv("DISCORD_TOKEN")
+async def main():
 
-if not token:
-    print("❌ Missing DISCORD_TOKEN")
-else:
-    bot.run(token)
+    token = os.getenv("DISCORD_TOKEN")
+
+    if not token:
+        print("❌ Missing DISCORD_TOKEN")
+        return
+
+    async with bot:
+        await bot.start(token)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
