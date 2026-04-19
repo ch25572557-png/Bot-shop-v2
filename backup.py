@@ -1,27 +1,44 @@
 import discord
 import asyncio
 
+
 class BackupSystem:
+
     def __init__(self, brain, bot):
         self.brain = brain
         self.bot = bot
-        self._lock = asyncio.Lock()  # 🔥 กัน spam send พร้อมกัน
+
+        # 🔥 cache channel ลด API call
+        self._channel_cache = None
+        self._channel_id = None
 
     # =====================
-    # 🔧 GET CHANNEL (SAFE)
+    # 🔧 GET CHANNEL (CACHED)
     # =====================
     async def _get_channel(self):
+
         try:
             ch_id = self.brain.get("CHANNELS.BACKUP")
+
             if not ch_id:
                 return None
 
             ch_id = int(ch_id)
 
+            # =====================
+            # 🔥 CACHE HIT
+            # =====================
+            if self._channel_cache and self._channel_id == ch_id:
+                return self._channel_cache
+
             channel = self.bot.get_channel(ch_id)
 
             if channel is None:
                 channel = await self.bot.fetch_channel(ch_id)
+
+            # cache update
+            self._channel_cache = channel
+            self._channel_id = ch_id
 
             return channel
 
@@ -30,25 +47,27 @@ class BackupSystem:
             return None
 
     # =====================
-    # 💾 CORE LOG
+    # 💾 CORE LOG (PRO SAFE)
     # =====================
     async def log(self, message):
 
         channel = await self._get_channel()
+
         if not channel:
             print("[BACKUP] channel not found")
             return
 
         try:
-            async with self._lock:  # 🔥 กันยิงพร้อมกัน
+            embed = discord.Embed(
+                title="💾 BACKUP LOG",
+                description=message[:4000],  # 🔥 กัน Discord limit crash
+                color=0x95a5a6
+            )
 
-                embed = discord.Embed(
-                    title="💾 BACKUP LOG",
-                    description=message,
-                    color=0x95a5a6
-                )
+            await channel.send(embed=embed)
 
-                await channel.send(embed=embed)
+        except discord.HTTPException as e:
+            print("[BACKUP HTTP ERROR]", e)
 
         except Exception as e:
             print("[BACKUP ERROR]", e)
@@ -76,7 +95,7 @@ class BackupSystem:
         )
 
     # =====================
-    # ❌ CANCEL LOG (เพิ่มให้)
+    # ❌ CANCEL LOG
     # =====================
     async def cancel(self, order_id, user, item):
 
