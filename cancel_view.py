@@ -1,5 +1,4 @@
 import discord
-from utils import safe_send
 
 
 # =====================
@@ -24,7 +23,7 @@ class CancelSelect(discord.ui.Select):
             orders = cur.fetchall()
 
         except Exception as e:
-            print("[CANCEL SELECT DB ERROR]", e)
+            print("[CANCEL DB ERROR]", e)
             orders = []
 
         for o in orders:
@@ -40,13 +39,13 @@ class CancelSelect(discord.ui.Select):
         if not options:
             options = [
                 discord.SelectOption(
-                    label="ไม่มีออเดอร์ให้ยกเลิก",
+                    label="ไม่มีออเดอร์",
                     value="none"
                 )
             ]
 
         super().__init__(
-            placeholder="❌ เลือกออเดอร์ที่ต้องการยกเลิก",
+            placeholder="❌ เลือกออเดอร์",
             options=options
         )
 
@@ -73,47 +72,57 @@ class CancelSelect(discord.ui.Select):
 
             if status == "DONE":
                 return await interaction.response.send_message(
-                    "❌ ออเดอร์นี้เสร็จแล้ว",
+                    "❌ ออเดอร์เสร็จแล้ว",
+                    ephemeral=True
+                )
+
+            if status == "CANCELLED":
+                return await interaction.response.send_message(
+                    "❌ ถูกยกเลิกแล้ว",
                     ephemeral=True
                 )
 
             # =====================
-            # ❌ CANCEL ORDER
+            # ❌ UPDATE STATUS
             # =====================
             self.bot.mem.update_order_status(order_id, "CANCELLED")
 
             # =====================
-            # 🔁 RETURN STOCK (SAFE)
+            # 🔁 RETURN STOCK (SAFE SINGLE SOURCE)
+            # =====================
+            self.bot.mem.add_stock(item, amount)
+
+            # =====================
+            # 🎫 DELETE TICKET CHANNEL
             # =====================
             try:
-                if hasattr(self.bot.stock, "add"):
-                    self.bot.stock.add(item, amount, 0)
-                else:
-                    cur = self.bot.mem.conn.cursor()
-                    cur.execute(
-                        "UPDATE stock SET qty = qty + ? WHERE name=?",
-                        (amount, item)
-                    )
-                    self.bot.mem.conn.commit()
+                channel_id = self.bot.mem.get_ticket(order_id)
+
+                if channel_id:
+                    channel = self.bot.get_channel(int(channel_id))
+
+                    if channel:
+                        await channel.send("❌ ออเดอร์ถูกยกเลิก กำลังปิดห้อง...")
+                        await discord.utils.sleep_until(discord.utils.utcnow())
+
+                        await channel.delete(reason="Order cancelled")
 
             except Exception as e:
-                print("[STOCK RETURN ERROR]", e)
+                print("[DELETE CHANNEL ERROR]", e)
 
             # =====================
-            # 📢 NOTIFY (SAFE)
+            # 📢 NOTIFY ADMIN
             # =====================
             try:
                 channel_id = self.bot.brain.channel("ORDER_NOTIFY")
-
                 channel = self.bot.get_channel(int(channel_id)) if channel_id else None
 
                 if channel:
                     embed = discord.Embed(
                         title="❌ ORDER CANCELLED",
-                        description=f"Order #{order_id}\nItem: {item} x{amount}",
+                        description=f"Order #{order_id}\n{item} x{amount}",
                         color=0xff0000
                     )
-
                     await channel.send(embed=embed)
 
             except Exception as e:
