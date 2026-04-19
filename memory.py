@@ -9,18 +9,12 @@ class Memory:
         self.db = None
         self.lock = asyncio.Lock()
 
-    # =====================
-    # 🚀 INIT DB
-    # =====================
     async def init(self):
 
         self.db = await aiosqlite.connect(self.db_path)
         await self.db.execute("PRAGMA journal_mode=WAL")
         await self.db.execute("PRAGMA synchronous=NORMAL")
 
-        # =====================
-        # 🛒 ORDERS
-        # =====================
         await self.db.execute("""
         CREATE TABLE IF NOT EXISTS orders(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -32,9 +26,6 @@ class Memory:
         )
         """)
 
-        # =====================
-        # 📦 STOCK
-        # =====================
         await self.db.execute("""
         CREATE TABLE IF NOT EXISTS stock(
             name TEXT PRIMARY KEY,
@@ -43,9 +34,6 @@ class Memory:
         )
         """)
 
-        # =====================
-        # 💰 POINTS
-        # =====================
         await self.db.execute("""
         CREATE TABLE IF NOT EXISTS points(
             user TEXT PRIMARY KEY,
@@ -53,9 +41,6 @@ class Memory:
         )
         """)
 
-        # =====================
-        # 🎫 TICKETS
-        # =====================
         await self.db.execute("""
         CREATE TABLE IF NOT EXISTS tickets(
             order_id INTEGER PRIMARY KEY,
@@ -66,7 +51,7 @@ class Memory:
         await self.db.commit()
 
     # =====================
-    # ⚙️ EXEC WRAPPER
+    # ⚙️ EXEC
     # =====================
     async def execute(self, query, params=(), fetch=False, one=False):
 
@@ -88,21 +73,21 @@ class Memory:
             return None
 
     # =====================
-    # 🛒 ORDER SYSTEM
+    # 🛒 ORDER (FIXED)
     # =====================
     async def add_order(self, user, item, amount=1, roblox_user=None, status="PENDING"):
 
         amount = max(int(amount or 1), 1)
 
-        cur = await self.execute(
-            "INSERT INTO orders(user,item,amount,roblox_user,status) VALUES(?,?,?,?,?)",
-            (user, item, amount, roblox_user, status)
-        )
-
-        return cur.lastrowid if cur else None
+        async with self.lock:
+            cur = await self.db.execute(
+                "INSERT INTO orders(user,item,amount,roblox_user,status) VALUES(?,?,?,?,?)",
+                (user, item, amount, roblox_user, status)
+            )
+            await self.db.commit()
+            return cur.lastrowid
 
     async def get_order(self, order_id):
-
         return await self.execute(
             "SELECT user,item,amount,roblox_user,status FROM orders WHERE id=?",
             (order_id,),
@@ -110,7 +95,6 @@ class Memory:
         )
 
     async def update_order_status(self, order_id, status):
-
         await self.execute(
             "UPDATE orders SET status=? WHERE id=?",
             (status, order_id)
@@ -126,17 +110,8 @@ class Memory:
 
         return row[0] if row else None
 
-    async def get_recent_orders(self):
-
-        rows = await self.execute(
-            "SELECT id,item,amount,status FROM orders ORDER BY id DESC LIMIT 10",
-            fetch=True
-        )
-
-        return rows or []
-
     # =====================
-    # 🎫 TICKET SYSTEM
+    # 🎫 TICKET
     # =====================
     async def save_ticket(self, order_id, channel_id):
 
@@ -153,28 +128,30 @@ class Memory:
             one=True
         )
 
-        return int(row[0]) if row and row[0] else None
+        if not row:
+            return None
+
+        try:
+            return int(row[0])
+        except:
+            return None
 
     # =====================
-    # 📦 STOCK SYSTEM (FARM-FRIENDLY)
+    # 📦 STOCK (FARM V3 SAFE MODE)
     # =====================
-
     def _norm(self, item):
         return str(item).strip().lower()
 
-    # ❌ ไม่ block flow แล้ว (V3 concept)
     async def minus_stock(self, item, amount=1):
 
         item = self._norm(item)
         amount = max(int(amount or 1), 1)
 
         async with self.lock:
-
             cur = await self.db.execute(
                 "UPDATE stock SET qty = qty - ? WHERE name=? AND qty >= ?",
                 (amount, item, amount)
             )
-
             await self.db.commit()
             return cur.rowcount > 0
 
@@ -212,7 +189,7 @@ class Memory:
         return rows or []
 
     # =====================
-    # 💰 POINT SYSTEM
+    # 💰 POINTS
     # =====================
     async def add_points(self, user, point):
 
