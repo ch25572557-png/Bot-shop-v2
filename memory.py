@@ -4,6 +4,9 @@ import threading
 
 class Memory:
 
+    # =====================
+    # INIT DB
+    # =====================
     def __init__(self):
 
         self.conn = sqlite3.connect(
@@ -65,7 +68,7 @@ class Memory:
         self.conn.commit()
 
     # =====================
-    # ORDER
+    # ORDER SYSTEM
     # =====================
     def add_order(self, user, item, amount=1, roblox_user=None, status="WAIT"):
 
@@ -111,6 +114,32 @@ class Memory:
             print("[MEMORY] update_order error:", e)
 
     # =====================
+    # TICKET SYSTEM
+    # =====================
+    def save_ticket(self, order_id, channel_id):
+        try:
+            with self.lock:
+                self.conn.execute("""
+                INSERT OR REPLACE INTO tickets(order_id, channel_id)
+                VALUES(?, ?)
+                """, (order_id, channel_id))
+                self.conn.commit()
+        except Exception as e:
+            print("[MEMORY] save_ticket error:", e)
+
+    def get_ticket(self, order_id):
+        try:
+            cur = self.conn.cursor()
+            cur.execute(
+                "SELECT channel_id FROM tickets WHERE order_id=?",
+                (order_id,)
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+        except:
+            return None
+
+    # =====================
     # STOCK SAFE
     # =====================
     def minus_stock(self, item, amount=1):
@@ -154,12 +183,24 @@ class Memory:
 
         try:
             with self.lock:
-                self.conn.execute("""
-                INSERT INTO stock(name, qty, price)
-                VALUES(?, ?, 0)
-                ON CONFLICT(name)
-                DO UPDATE SET qty = qty + excluded.qty
-                """, (item, amount))
+                cur = self.conn.cursor()
+
+                cur.execute(
+                    "SELECT qty FROM stock WHERE name=?",
+                    (item,)
+                )
+                row = cur.fetchone()
+
+                if row:
+                    cur.execute(
+                        "UPDATE stock SET qty = qty + ? WHERE name=?",
+                        (amount, item)
+                    )
+                else:
+                    cur.execute(
+                        "INSERT INTO stock(name, qty, price) VALUES(?, ?, 0)",
+                        (item, amount)
+                    )
 
                 self.conn.commit()
 
@@ -169,7 +210,10 @@ class Memory:
     def get_stock(self, item):
         try:
             cur = self.conn.cursor()
-            cur.execute("SELECT qty FROM stock WHERE name=?", (item,))
+            cur.execute(
+                "SELECT qty FROM stock WHERE name=?",
+                (item,)
+            )
             row = cur.fetchone()
             return row[0] if row else 0
         except:
