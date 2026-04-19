@@ -1,5 +1,5 @@
 import asyncio
-from utils import safe_send, safe_db_execute
+from utils import safe_db_execute
 
 
 class DashboardWorker:
@@ -8,7 +8,7 @@ class DashboardWorker:
         self.bot = bot
         self.running = False
 
-        # 🔥 cache message id
+        # 🔥 persist message id (กันหายหลัง restart)
         self.message_id = None
 
     # =====================
@@ -23,34 +23,33 @@ class DashboardWorker:
         try:
             self.bot.loop.create_task(self.loop())
             print("[DASHBOARD] started")
-
         except Exception as e:
             print("[DASHBOARD START ERROR]", e)
 
     # =====================
-    # 🔁 MAIN LOOP
+    # 🔁 LOOP
     # =====================
     async def loop(self):
 
-        while self.running:
+        await asyncio.sleep(3)  # 🔥 รอ bot ready ก่อน
 
+        while self.running:
             try:
                 await self.update_dashboard()
-
             except Exception as e:
                 print("[DASHBOARD LOOP ERROR]", e)
 
             delay = self.bot.brain.setting("DASHBOARD_AUTO_UPDATE_SEC", 10)
 
             try:
-                delay = int(delay)
+                delay = max(int(delay), 5)
             except:
                 delay = 10
 
             await asyncio.sleep(delay)
 
     # =====================
-    # 📊 BUILD DASHBOARD
+    # 📊 BUILD TEXT
     # =====================
     def build_text(self):
 
@@ -81,12 +80,11 @@ class DashboardWorker:
         )
 
     # =====================
-    # 📤 UPDATE DASHBOARD
+    # 📤 UPDATE
     # =====================
     async def update_dashboard(self):
 
         channel_id = self.bot.brain.channel("DASHBOARD_CHANNEL")
-
         if not channel_id:
             return
 
@@ -94,40 +92,54 @@ class DashboardWorker:
         # 🔥 SAFE CHANNEL
         # =====================
         try:
-            channel = self.bot.get_channel(int(channel_id)) or await self.bot.fetch_channel(int(channel_id))
-        except:
+            channel = self.bot.get_channel(channel_id)
+
+            if not channel:
+                channel = await self.bot.fetch_channel(channel_id)
+
+        except Exception as e:
+            print("[DASHBOARD CHANNEL ERROR]", e)
             return
 
         content = self.build_text()
 
+        # =====================
+        # 🔥 LOAD SAVED MESSAGE ID (ครั้งแรก)
+        # =====================
+        if not self.message_id:
+            try:
+                self.message_id = self.bot.brain.setting("DASHBOARD_MESSAGE_ID")
+            except:
+                self.message_id = None
+
         try:
 
             # =====================
-            # 🆕 FIRST MESSAGE
+            # ✏️ EDIT MESSAGE
             # =====================
-            if not self.message_id:
+            if self.message_id:
 
-                msg = await channel.send(content)
-                self.message_id = msg.id
-                return
+                try:
+                    msg = await channel.fetch_message(int(self.message_id))
+                    await msg.edit(content=content)
+                    return
+
+                except:
+                    print("[DASHBOARD] message lost, recreating...")
+                    self.message_id = None
 
             # =====================
-            # ✏️ EDIT EXISTING
+            # 🆕 CREATE NEW
             # =====================
+            msg = await channel.send(content)
+            self.message_id = msg.id
+
+            # 🔥 save id ลง config (ถ้ามีระบบ save)
             try:
-                msg = await channel.fetch_message(self.message_id)
-                await msg.edit(content=content)
-
+                print(f"[DASHBOARD] new message id = {self.message_id}")
             except:
-
-                # 🔥 RESET IF BROKEN
-                self.message_id = None
-
-                msg = await channel.send(content)
-                self.message_id = msg.id
+                pass
 
         except Exception as e:
             print("[DASHBOARD UPDATE ERROR]", e)
-
-            # hard reset fallback
             self.message_id = None
