@@ -1,97 +1,138 @@
+import discord
+
+
 class NotifySystem:
+
     def __init__(self, brain, bot):
         self.brain = brain
         self.bot = bot
 
     # =====================
-    # 🔧 GET ADMIN CHANNEL (SAFE FIXED)
+    # 🔧 GET CHANNEL (SAFE + FETCH)
     # =====================
-    def _get_admin_channel(self):
+    async def _get_channel(self):
+
         try:
-            ch_id = self.brain.get("CHANNELS.ORDER_CHANNEL")
+            ch_id = self.brain.channel("ORDER_NOTIFY")  # 🔥 FIX ใช้ key เดียวทั้งระบบ
             if not ch_id:
                 return None
 
-            return self.bot.get_channel(int(ch_id))
-        except:
+            channel = self.bot.get_channel(ch_id)
+
+            if not channel:
+                channel = await self.bot.fetch_channel(ch_id)
+
+            return channel
+
+        except Exception as e:
+            print("[NOTIFY] channel error:", e)
             return None
 
     # =====================
-    # 🔔 NEW ORDER NOTIFY (FIXED + SAFE ROLE)
+    # 🔔 NEW ORDER
     # =====================
     async def admin(self, user, item, order_id=None):
 
-        ch = self._get_admin_channel()
+        ch = await self._get_channel()
         if not ch:
             return
 
         try:
-            role_id = self.brain.get("ROLES.ADMIN_ROLE")
+            role_id = self.brain.role("ADMIN_ROLE")
 
-            msg = (
-                f"🔔 NEW ORDER\n"
-                f"👤 User: {getattr(user, 'mention', str(user))}\n"
-                f"📦 Item: {item}"
+            embed = discord.Embed(
+                title="🔔 NEW ORDER",
+                color=0x00ffcc
+            )
+
+            embed.add_field(
+                name="👤 User",
+                value=getattr(user, "mention", str(user)),
+                inline=False
+            )
+
+            embed.add_field(
+                name="📦 Item",
+                value=item,
+                inline=False
             )
 
             if order_id:
-                msg += f"\n🆔 Order ID: {order_id}"
+                embed.add_field(
+                    name="🆔 Order ID",
+                    value=str(order_id),
+                    inline=False
+                )
 
-            # 🔥 safe role ping
-            if role_id:
-                msg = f"<@&{role_id}>\n" + msg
+            content = f"<@&{role_id}>" if role_id else None
 
-            await ch.send(msg)
+            await ch.send(content=content, embed=embed)
 
         except Exception as e:
             print("[NOTIFY] admin error:", e)
 
     # =====================
-    # ✅ COMPLETE NOTIFY
+    # ✅ COMPLETE
     # =====================
     async def complete(self, user, item, order_id=None):
 
-        ch = self._get_admin_channel()
+        ch = await self._get_channel()
         if not ch:
             return
 
         try:
-            msg = (
-                f"✅ ORDER COMPLETE\n"
-                f"👤 User: {getattr(user, 'mention', str(user))}\n"
-                f"📦 Item: {item}"
+            embed = discord.Embed(
+                title="✅ ORDER COMPLETE",
+                color=0x00ff00
+            )
+
+            embed.add_field(
+                name="👤 User",
+                value=getattr(user, "mention", str(user)),
+                inline=False
+            )
+
+            embed.add_field(
+                name="📦 Item",
+                value=item,
+                inline=False
             )
 
             if order_id:
-                msg += f"\n🆔 Order ID: {order_id}"
+                embed.add_field(
+                    name="🆔 Order ID",
+                    value=str(order_id),
+                    inline=False
+                )
 
-            await ch.send(msg)
+            await ch.send(embed=embed)
 
         except Exception as e:
             print("[NOTIFY] complete error:", e)
 
     # =====================
-    # ⚠️ STOCK ALERT (SAFE + ROLE FIX)
+    # ⚠️ STOCK ALERT
     # =====================
     async def stock_alert(self, item, qty):
 
-        ch = self._get_admin_channel()
+        ch = await self._get_channel()
         if not ch:
             return
 
         try:
-            role_id = self.brain.get("ROLES.ADMIN_ROLE")
+            role_id = self.brain.role("ADMIN_ROLE")
 
-            msg = (
-                f"⚠️ STOCK ALERT\n"
-                f"📦 Item: {item}\n"
-                f"📉 Remaining: {qty}"
+            embed = discord.Embed(
+                title="⚠️ STOCK ALERT",
+                color=0xff0000
             )
 
-            if role_id:
-                msg += f"\n<@&{role_id}>"
+            embed.add_field(name="📦 Item", value=item, inline=False)
+            embed.add_field(name="📉 Remaining", value=str(qty), inline=False)
 
-            await ch.send(msg)
+            content = f"<@&{role_id}>" if role_id else None
+
+            await ch.send(content=content, embed=embed)
 
         except Exception as e:
             print("[NOTIFY] stock alert error:", e)
