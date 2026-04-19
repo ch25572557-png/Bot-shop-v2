@@ -1,14 +1,18 @@
 import discord
 import traceback
 import asyncio
+import aiosqlite
+
 
 # =====================
-# 📤 SAFE SEND MESSAGE (IMPROVED)
+# 📤 SAFE SEND MESSAGE (V2 READY)
 # =====================
 async def safe_send(target, content=None, embed=None, view=None, ephemeral=False):
 
     try:
-        # 🔥 Interaction case
+        # =====================
+        # INTERACTION
+        # =====================
         if isinstance(target, discord.Interaction):
 
             if target.response.is_done():
@@ -26,7 +30,9 @@ async def safe_send(target, content=None, embed=None, view=None, ephemeral=False
                 ephemeral=ephemeral
             )
 
-        # 🔥 Channel case
+        # =====================
+        # CHANNEL
+        # =====================
         if target:
             return await target.send(
                 content=content,
@@ -36,14 +42,16 @@ async def safe_send(target, content=None, embed=None, view=None, ephemeral=False
 
     except discord.Forbidden:
         print("[SAFE_SEND] ❌ Missing permissions")
+
     except discord.HTTPException as e:
         print("[SAFE_SEND] ❌ HTTP error:", e)
+
     except Exception as e:
-        print("[SAFE_SEND ERROR]", e)
+        log_error("SAFE_SEND ERROR", e)
 
 
 # =====================
-# 📡 SAFE GET CHANNEL (IMPROVED)
+# 📡 SAFE GET CHANNEL
 # =====================
 def safe_get_channel(bot, channel_id):
 
@@ -51,46 +59,38 @@ def safe_get_channel(bot, channel_id):
         if not channel_id:
             return None
 
-        channel = bot.get_channel(int(channel_id))
-
-        if channel is None:
-            print("[CHANNEL WARN] Channel not found:", channel_id)
-
-        return channel
+        return bot.get_channel(int(channel_id))
 
     except Exception as e:
-        print("[GET_CHANNEL ERROR]", e)
+        log_error("GET_CHANNEL ERROR", e)
         return None
 
 
 # =====================
-# 🧠 SAFE DB EXECUTE (IMPROVED)
+# 🧠 SAFE DB EXECUTE (🔥 V2 FIXED)
 # =====================
-def safe_db_execute(conn, query, params=(), commit=False):
+async def safe_db_execute(db_path, query, params=(), fetch="all"):
 
     try:
-        cur = conn.cursor()
-        cur.execute(query, params)
+        async with aiosqlite.connect(db_path) as db:
+            cur = await db.execute(query, params)
 
-        result = None
+            if fetch == "one":
+                return await cur.fetchone()
 
-        try:
-            result = cur.fetchall()
-        except:
-            result = None
+            if fetch == "all":
+                return await cur.fetchall()
 
-        if commit:
-            conn.commit()
-
-        return result
+            await db.commit()
+            return True
 
     except Exception as e:
-        print("[DB ERROR]", e)
+        log_error("DB ERROR", e)
         return None
 
 
 # =====================
-# ⚠️ ERROR LOGGER (IMPROVED)
+# ⚠️ ERROR LOGGER
 # =====================
 def log_error(title, error):
 
@@ -102,11 +102,15 @@ def log_error(title, error):
 
 
 # =====================
-# ⏱ SAFE ASYNC LOOP (IMPROVED)
+# ⏱ SAFE ASYNC LOOP (PRODUCTION)
 # =====================
-async def safe_loop(func, delay):
+async def safe_loop(func, delay, running_flag=None):
 
     while True:
+
+        if running_flag is not None and not running_flag():
+            break
+
         try:
             await func()
 
