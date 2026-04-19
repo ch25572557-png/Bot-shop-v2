@@ -20,38 +20,48 @@ class Brain:
             print(f"[BRAIN] config reloaded v{self._version}")
 
     # =====================
-    # 📦 SAFE GET (CORE)
+    # 📦 SAFE GET
     # =====================
     def get(self, path, default=None):
         with self._lock:
             return self.config.get(path, default)
 
     # =====================
-    # 🔐 CHANNEL (SAFE INT)
+    # 🔐 CHANNEL (DEBUG SAFE)
     # =====================
     def channel(self, key):
         with self._lock:
             val = self.config.get_channel(key)
 
+            if not val:
+                print(f"[BRAIN WARNING] channel {key} not found")
+                return None
+
             try:
                 return int(val)
-            except:
+            except Exception:
+                print(f"[BRAIN ERROR] invalid channel id: {key} = {val}")
                 return None
 
     # =====================
-    # 👑 ROLE (SAFE INT)
+    # 👑 ROLE (DEBUG SAFE)
     # =====================
     def role(self, key):
         with self._lock:
             val = self.config.get_role(key)
 
+            if not val:
+                print(f"[BRAIN WARNING] role {key} not found")
+                return None
+
             try:
                 return int(val)
-            except:
+            except Exception:
+                print(f"[BRAIN ERROR] invalid role id: {key} = {val}")
                 return None
 
     # =====================
-    # ⚙️ SETTING (SAFE)
+    # ⚙️ SETTING
     # =====================
     def setting(self, key, default=None):
         with self._lock:
