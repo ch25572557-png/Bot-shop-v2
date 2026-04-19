@@ -11,7 +11,7 @@ class StockSystem:
         self.running = False
 
     # =====================
-    # 📦 MINUS STOCK (ใช้ Memory)
+    # 📦 MINUS STOCK
     # =====================
     async def minus(self, item, amount=1):
         return await self.mem.minus_stock(item, amount)
@@ -40,7 +40,7 @@ class StockSystem:
         return await self.mem.get_stock(item)
 
     # =====================
-    # 🚀 START LOOP (ASYNC)
+    # 🚀 START LOOP
     # =====================
     def start(self):
 
@@ -50,7 +50,7 @@ class StockSystem:
         self.running = True
         self.bot.loop.create_task(self._loop())
 
-        print("📦 STOCK MONITOR STARTED (V2)")
+        print("📦 STOCK MONITOR STARTED (V2 FIXED)")
 
     # =====================
     # 🔁 LOOP
@@ -67,16 +67,12 @@ class StockSystem:
                 await asyncio.sleep(5)
 
     # =====================
-    # 🔍 CHECK STOCK
+    # 🔍 CHECK STOCK (🔥 FIX สำคัญ)
     # =====================
     async def check_stock(self):
 
         try:
-            # 🔥 ดึงข้อมูลแบบ async
-            async with self.mem.lock:
-                async with self.mem_conn() as db:
-                    cur = await db.execute("SELECT name, qty FROM stock")
-                    items = await cur.fetchall()
+            items = await self.mem.get_all_stock()  # 🔥 ใช้ Memory เท่านั้น
 
         except Exception as e:
             print("[STOCK FETCH ERROR]", e)
@@ -87,14 +83,7 @@ class StockSystem:
                 await self.notify(name, qty)
 
     # =====================
-    # 🔌 DB CONNECT
-    # =====================
-    async def mem_conn(self):
-        import aiosqlite
-        return await aiosqlite.connect(self.mem.db_path)
-
-    # =====================
-    # 📢 NOTIFY (SAFE)
+    # 📢 NOTIFY
     # =====================
     async def notify(self, name, qty):
 
