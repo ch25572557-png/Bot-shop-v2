@@ -8,16 +8,14 @@ class StatusView(discord.ui.View):
         self.order_id = order_id
 
     # =====================
-    # 🔐 ADMIN CHECK
+    # 🔐 ADMIN CHECK (FIX)
     # =====================
     def is_admin(self, interaction: discord.Interaction):
         try:
-            role_id = self.bot.brain.get("ROLES.ADMIN_ROLE")
+            role_id = self.bot.brain.role("ADMIN_ROLE")  # 🔥 FIX
 
             if not role_id:
                 return interaction.user.guild_permissions.administrator
-
-            role_id = int(role_id)
 
             return (
                 interaction.user.guild_permissions.administrator
@@ -27,9 +25,9 @@ class StatusView(discord.ui.View):
             return interaction.user.guild_permissions.administrator
 
     # =====================
-    # 📢 SEND EMBED STATUS
+    # 📢 STATUS EMBED
     # =====================
-    async def send_ticket(self, interaction, status, color=0x3498db):
+    async def send_ticket(self, interaction, status):
 
         color_map = {
             "WAIT_ADMIN": 0x95a5a6,
@@ -41,8 +39,8 @@ class StatusView(discord.ui.View):
 
         embed = discord.Embed(
             title="📊 STATUS UPDATE",
-            description=f"🎫 Order #{self.order_id}",
-            color=color_map.get(status, color)
+            description=f"Order #{self.order_id}",
+            color=color_map.get(status, 0x3498db)
         )
 
         embed.add_field(name="🔄 Status", value=status, inline=False)
@@ -55,7 +53,7 @@ class StatusView(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if not self.is_admin(interaction):
             await interaction.response.send_message(
-                "❌ เฉพาะแอดมินเท่านั้น",
+                "❌ เฉพาะแอดมิน",
                 ephemeral=True
             )
             return False
@@ -64,77 +62,94 @@ class StatusView(discord.ui.View):
     # =====================
     # ⏳ WAIT ADMIN
     # =====================
-    @discord.ui.button(label="⏳ รอแอดมิน", style=discord.ButtonStyle.gray)
+    @discord.ui.button(
+        label="⏳ รอแอดมิน",
+        style=discord.ButtonStyle.gray,
+        custom_id="status_wait_admin"
+    )
     async def wait_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        await interaction.response.defer(ephemeral=True)
 
         self.bot.mem.update_order_status(self.order_id, "WAIT_ADMIN")
         await self.send_ticket(interaction, "WAIT_ADMIN")
 
-        await interaction.response.send_message(
-            "✅ ตั้งค่า WAIT_ADMIN แล้ว",
-            ephemeral=True
-        )
+        await interaction.followup.send("✅ WAIT_ADMIN", ephemeral=True)
 
     # =====================
     # 👨‍💼 ACCEPT
     # =====================
-    @discord.ui.button(label="👨‍💼 รับออเดอร์", style=discord.ButtonStyle.blurple)
+    @discord.ui.button(
+        label="👨‍💼 รับออเดอร์",
+        style=discord.ButtonStyle.blurple,
+        custom_id="status_accept"
+    )
     async def admin_accept(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        await interaction.response.defer(ephemeral=True)
 
         self.bot.mem.update_order_status(self.order_id, "ADMIN_ACCEPTED")
         await self.send_ticket(interaction, "ADMIN_ACCEPTED")
 
-        await interaction.response.send_message(
-            "✅ รับออเดอร์แล้ว",
-            ephemeral=True
-        )
+        await interaction.followup.send("✅ รับออเดอร์แล้ว", ephemeral=True)
 
     # =====================
     # 🪏 FARMING
     # =====================
-    @discord.ui.button(label="🪏 กำลังฟาร์ม", style=discord.ButtonStyle.green)
+    @discord.ui.button(
+        label="🪏 กำลังฟาร์ม",
+        style=discord.ButtonStyle.green,
+        custom_id="status_farming"
+    )
     async def farming(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        await interaction.response.defer(ephemeral=True)
 
         self.bot.mem.update_order_status(self.order_id, "FARMING")
         await self.send_ticket(interaction, "FARMING")
 
-        await interaction.response.send_message(
-            "🪏 เริ่มฟาร์มแล้ว",
-            ephemeral=True
-        )
+        await interaction.followup.send("🪏 ฟาร์มแล้ว", ephemeral=True)
 
     # =====================
     # 📦 WAIT CUSTOMER
     # =====================
-    @discord.ui.button(label="📦 รอลูกค้า", style=discord.ButtonStyle.gray)
+    @discord.ui.button(
+        label="📦 รอลูกค้า",
+        style=discord.ButtonStyle.gray,
+        custom_id="status_wait_customer"
+    )
     async def waiting_customer(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        await interaction.response.defer(ephemeral=True)
 
         self.bot.mem.update_order_status(self.order_id, "WAIT_CUSTOMER")
         await self.send_ticket(interaction, "WAIT_CUSTOMER")
 
-        await interaction.response.send_message(
-            "📦 รอลูกค้าแล้ว",
-            ephemeral=True
-        )
+        await interaction.followup.send("📦 รอลูกค้า", ephemeral=True)
 
     # =====================
-    # ✅ DONE
+    # ✅ DONE (🔥 FIX สำคัญสุด)
     # =====================
-    @discord.ui.button(label="✅ ส่งของเสร็จแล้ว", style=discord.ButtonStyle.red)
+    @discord.ui.button(
+        label="✅ ส่งของเสร็จแล้ว",
+        style=discord.ButtonStyle.red,
+        custom_id="status_done"
+    )
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        if not self.is_admin(interaction):
-            return await interaction.response.send_message(
-                "❌ admin only",
-                ephemeral=True
-            )
-
-        await interaction.response.send_message(
-            "🔄 กำลังปิดออเดอร์...",
-            ephemeral=True
-        )
+        await interaction.response.defer(ephemeral=True)
 
         try:
-            await self.bot.order.complete(interaction.channel)
+            # 🔥 update ก่อน
+            self.bot.mem.update_order_status(self.order_id, "DONE")
+
+            success = await self.bot.order.complete(interaction.channel)
+
+            if success:
+                await interaction.followup.send("✅ ปิดออเดอร์แล้ว", ephemeral=True)
+            else:
+                await interaction.followup.send("❌ ปิดไม่สำเร็จ", ephemeral=True)
+
         except Exception as e:
             print("[STATUS COMPLETE ERROR]", e)
+            await interaction.followup.send("❌ ERROR", ephemeral=True)
