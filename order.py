@@ -1,7 +1,6 @@
 import asyncio
 import discord
 
-
 class OrderSystem:
 
     def __init__(self, mem, ticket, notify, backup, brain, bot):
@@ -13,15 +12,16 @@ class OrderSystem:
         self.brain = brain
         self.bot = bot
 
-        # =====================
-        # 🌾 FARM CORE QUEUE
-        # =====================
         self.farm_queue = asyncio.Queue()
 
-        # =====================
         self.processing = set()
+        self.processing_orders = set()
+
         self._started = False
         self._lock = asyncio.Lock()
+
+        # 🔥 ปรับจำนวน worker ได้
+        self.worker_count = 3
 
     # =====================
     # 🚀 START SYSTEM
@@ -31,32 +31,11 @@ class OrderSystem:
             return
 
         self._started = True
-        asyncio.create_task(self.farm_worker())
-        print("🌾 FARM V3 STABLE STARTED")
 
-    # =====================
-    # 📢 ADMIN LOG
-    # =====================
-    async def send_admin(self, title, desc, color=0x00ffcc):
+        for _ in range(self.worker_count):
+            asyncio.create_task(self.farm_worker())
 
-        try:
-            ch_id = self.brain.channel("ORDER_NOTIFY")
-            if not ch_id:
-                return
-
-            channel = self.bot.get_channel(ch_id) or await self.bot.fetch_channel(ch_id)
-
-            if channel:
-                await channel.send(
-                    embed=discord.Embed(
-                        title=title,
-                        description=desc,
-                        color=color
-                    )
-                )
-
-        except Exception as e:
-            print("[ADMIN ERROR]", e)
+        print(f"🌾 FARM WORKERS STARTED: {self.worker_count}")
 
     # =====================
     # 📊 TICKET UPDATE
@@ -73,7 +52,7 @@ class OrderSystem:
             if channel:
                 await channel.send(
                     embed=discord.Embed(
-                        title="📊 FARM STATUS",
+                        title="📊 STATUS",
                         description=msg,
                         color=0x3498db
                     )
@@ -83,7 +62,7 @@ class OrderSystem:
             print("[TICKET ERROR]", e)
 
     # =====================
-    # 🛒 CREATE ORDER (CORE FLOW)
+    # 🛒 CREATE ORDER
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
@@ -101,17 +80,20 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # =====================
-        # 🌾 FARM QUEUE (ONLY SOURCE OF STOCK)
-        # =====================
-        await self.farm_queue.put({
-            "order_id": order_id,
-            "guild": guild,
-            "user": user,
-            "item": item,
-            "amount": amount,
-            "roblox_user": roblox_user
-        })
+        # 🔥 เช็ค stock ก่อน
+        stock = await self.mem.get_stock(item)
+
+        if stock >= amount:
+            await self.mem.update_order_status(order_id, "READY")
+            await self.send_ticket(order_id, "📦 ของพร้อมส่ง")
+        else:
+            await self.mem.update_order_status(order_id, "FARMING")
+
+            await self.farm_queue.put({
+                "order_id": order_id,
+                "item": item,
+                "amount": amount
+            })
 
         await self.notify.admin(user, item, order_id)
         await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
@@ -120,7 +102,7 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # ✅ COMPLETE ORDER (SAFE FINAL STEP)
+    # ✅ COMPLETE ORDER
     # =====================
     async def complete(self, channel):
 
@@ -134,89 +116,98 @@ class OrderSystem:
         self.processing.add(order_id)
 
         try:
-            data = await self.mem.get_order(order_id)
-            if not data:
-                return False
+            async with self._lock:
 
-            user, item, amount, roblox_user, status = data
-            item = item.lower().strip()
+                data = await self.mem.get_order(order_id)
+                if not data:
+                    return False
 
-            if status == "DONE":
-                return False
+                user, item, amount, roblox_user, status = data
+                item = item.lower().strip()
 
-            # =====================
-            # ⚠️ CHECK ONLY (NO FORCE DEDUCT HERE)
-            # =====================
-            stock = await self.mem.get_stock(item)
+                if status != "READY":
+                    await channel.send("❌ ยังไม่พร้อมส่ง")
+                    return False
 
-            if stock < amount:
-                await channel.send("❌ สต๊อกไม่พอ (กำลังฟาร์มเพิ่ม)")
-                return False
+                # 🔥 atomic stock
+                ok = await self.mem.minus_stock(item, amount)
 
-            # =====================
-            # FINALIZE ORDER
-            # =====================
-            await self.mem.update_order_status(order_id, "DONE")
+                if not ok:
+                    await channel.send("❌ stock ไม่พอ")
+                    return False
 
-            point = int(self.brain.setting("POINT_PER_ORDER", 0))
-            await self.mem.add_points(user, point)
+                await self.mem.update_order_status(order_id, "DONE")
 
-            await self.notify.complete(user, item, order_id)
-            await self.backup.complete(order_id, user, item)
+                point = int(self.brain.setting("POINT_PER_ORDER", 0))
+                await self.mem.add_points(user, point)
 
-            await self.send_ticket(order_id, "✅ ส่งของแล้ว")
+                await self.notify.complete(user, item, order_id)
+                await self.backup.complete(order_id, user, item)
 
-            await channel.send(
-                embed=discord.Embed(
-                    title="✅ DONE",
-                    description=f"{item} x{amount}\n+{point} points",
-                    color=0x00ff00
+                await self.send_ticket(order_id, "✅ ส่งของแล้ว")
+
+                await channel.send(
+                    embed=discord.Embed(
+                        title="✅ DONE",
+                        description=f"{item} x{amount}\n+{point} points",
+                        color=0x00ff00
+                    )
                 )
-            )
 
-            await asyncio.sleep(2)
+                await asyncio.sleep(2)
 
-            try:
-                fresh = self.bot.get_channel(channel.id) or await self.bot.fetch_channel(channel.id)
-                if fresh:
-                    await fresh.delete(reason=f"Order #{order_id} completed")
-            except Exception as e:
-                print("[DELETE ERROR]", e)
+                try:
+                    fresh = self.bot.get_channel(channel.id) or await self.bot.fetch_channel(channel.id)
+                    if fresh:
+                        await fresh.delete(reason=f"Order #{order_id} completed")
+                except Exception as e:
+                    print("[DELETE ERROR]", e)
 
-            return True
+                return True
 
         finally:
             self.processing.discard(order_id)
 
     # =====================
-    # 🌾 FARM ENGINE (STABLE SINGLE WORKER)
+    # 🌾 FARM WORKER (PRODUCTION)
     # =====================
     async def farm_worker(self):
 
         while True:
             try:
-                task = await self.farm_queue.get()
+                try:
+                    task = await asyncio.wait_for(self.farm_queue.get(), timeout=3)
 
-                order_id = task["order_id"]
-                item = task["item"]
-                amount = task["amount"]
+                    order_id = task["order_id"]
+                    item = task["item"]
+                    amount = task["amount"]
 
-                # =====================
-                # 🌾 SIM FARM DELAY
-                # =====================
-                await asyncio.sleep(2)
+                except asyncio.TimeoutError:
+                    # 🔥 fallback จาก DB
+                    rows = await self.mem.get_pending_farm(5)
 
-                # =====================
-                # ADD STOCK RESULT
-                # =====================
-                await self.mem.add_stock(item, amount)
+                    if not rows:
+                        await asyncio.sleep(2)
+                        continue
 
-                # =====================
-                # UPDATE STATUS
-                # =====================
-                await self.mem.update_order_status(order_id, "FARMED")
+                    order_id, item, amount = rows[0]
 
-                await self.send_ticket(order_id, "🌾 ฟาร์มเสร็จแล้ว")
+                # 🔒 กันซ้ำ
+                if order_id in self.processing_orders:
+                    continue
+
+                self.processing_orders.add(order_id)
+
+                try:
+                    await asyncio.sleep(2)
+
+                    await self.mem.add_stock(item, amount)
+                    await self.mem.update_order_status(order_id, "READY")
+
+                    await self.send_ticket(order_id, "🌾 ฟาร์มเสร็จแล้ว พร้อมส่ง")
+
+                finally:
+                    self.processing_orders.discard(order_id)
 
             except Exception as e:
                 print("[FARM ERROR]", e)
