@@ -12,30 +12,11 @@ class OrderSystem:
         self.brain = brain
         self.bot = bot
 
-        self.farm_queue = asyncio.Queue()
-
         self.processing = set()
-        self.processing_orders = set()
-
-        self._started = False
         self._lock = asyncio.Lock()
 
-        # 🔥 ปรับจำนวน worker ได้
-        self.worker_count = 3
-
-    # =====================
-    # 🚀 START SYSTEM
-    # =====================
-    async def start(self):
-        if self._started:
-            return
-
-        self._started = True
-
-        for _ in range(self.worker_count):
-            asyncio.create_task(self.farm_worker())
-
-        print(f"🌾 FARM WORKERS STARTED: {self.worker_count}")
+        # 🔥 inject ทีหลังจาก bot.py
+        self.farm_manager = None
 
     # =====================
     # 📊 TICKET UPDATE
@@ -80,7 +61,7 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # 🔥 เช็ค stock ก่อน
+        # 🔥 เช็ค stock
         stock = await self.mem.get_stock(item)
 
         if stock >= amount:
@@ -89,11 +70,9 @@ class OrderSystem:
         else:
             await self.mem.update_order_status(order_id, "FARMING")
 
-            await self.farm_queue.put({
-                "order_id": order_id,
-                "item": item,
-                "amount": amount
-            })
+            # 🔥 ใช้ farm_manager
+            if self.farm_manager:
+                await self.farm_manager.add_job(order_id, item, amount)
 
         await self.notify.admin(user, item, order_id)
         await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
@@ -129,7 +108,7 @@ class OrderSystem:
                     await channel.send("❌ ยังไม่พร้อมส่ง")
                     return False
 
-                # 🔥 atomic stock
+                # 🔥 ตัด stock แบบ atomic
                 ok = await self.mem.minus_stock(item, amount)
 
                 if not ok:
@@ -167,48 +146,3 @@ class OrderSystem:
 
         finally:
             self.processing.discard(order_id)
-
-    # =====================
-    # 🌾 FARM WORKER (PRODUCTION)
-    # =====================
-    async def farm_worker(self):
-
-        while True:
-            try:
-                try:
-                    task = await asyncio.wait_for(self.farm_queue.get(), timeout=3)
-
-                    order_id = task["order_id"]
-                    item = task["item"]
-                    amount = task["amount"]
-
-                except asyncio.TimeoutError:
-                    # 🔥 fallback จาก DB
-                    rows = await self.mem.get_pending_farm(5)
-
-                    if not rows:
-                        await asyncio.sleep(2)
-                        continue
-
-                    order_id, item, amount = rows[0]
-
-                # 🔒 กันซ้ำ
-                if order_id in self.processing_orders:
-                    continue
-
-                self.processing_orders.add(order_id)
-
-                try:
-                    await asyncio.sleep(2)
-
-                    await self.mem.add_stock(item, amount)
-                    await self.mem.update_order_status(order_id, "READY")
-
-                    await self.send_ticket(order_id, "🌾 ฟาร์มเสร็จแล้ว พร้อมส่ง")
-
-                finally:
-                    self.processing_orders.discard(order_id)
-
-            except Exception as e:
-                print("[FARM ERROR]", e)
-                await asyncio.sleep(2)
