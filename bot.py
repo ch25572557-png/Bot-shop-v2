@@ -21,7 +21,6 @@ from stock_view import StockView
 from stock_alert import StockAlertSystem
 from dashboard_worker import DashboardWorker
 
-# ✅ เพิ่ม
 from status_view import StatusView
 from farm_manager import FarmManager
 
@@ -61,7 +60,7 @@ bot.order = OrderSystem(
     bot
 )
 
-# 🔥 NEW: farm manager
+# 🔥 FARM MANAGER
 bot.farm = FarmManager(bot.mem, bot.brain, bot.order)
 bot.order.farm_manager = bot.farm
 
@@ -91,7 +90,7 @@ async def on_ready():
         print("[MEM INIT ERROR]", e)
 
     # =====================
-    # 🎛 VIEWS (🔥 FIX สำคัญ)
+    # 🎛 VIEWS (FIX)
     # =====================
     try:
         bot.add_view(ShopView(bot))
@@ -100,8 +99,8 @@ async def on_ready():
         bot.add_view(StockView(bot))
         bot.add_view(AdminDashboard(bot))
 
-        # 🔥 สำคัญสุด: ทำให้ปุ่ม ticket ไม่หาย
-        bot.add_view(StatusView(bot, 0))
+        # 🔥 FIX: ใช้ None แทน 0
+        bot.add_view(StatusView(bot, None))
 
         print("🎛 VIEWS REGISTERED")
     except Exception as e:
@@ -110,19 +109,24 @@ async def on_ready():
     # =====================
     # 🚀 START SYSTEMS
     # =====================
-    async def run(fn):
+    async def run(fn, name="SYSTEM"):
         try:
             result = fn()
             if asyncio.iscoroutine(result):
                 await result
+            print(f"✅ {name} STARTED")
         except Exception as e:
-            print("[SYSTEM ERROR]", e)
+            print(f"[{name} ERROR]", e)
 
-    await run(bot.stock.start)
-    await run(bot.order.start)
-    await run(bot.farm.start)          # 🔥 NEW
-    await run(bot.stock_alert.start)
-    await run(bot.dashboard.start)
+    await run(bot.stock.start, "STOCK")
+    await run(bot.order.start, "ORDER")
+
+    # 🔥 safe farm start
+    if bot.order.farm_manager:
+        await run(bot.farm.start, "FARM")
+
+    await run(bot.stock_alert.start, "STOCK ALERT")
+    await run(bot.dashboard.start, "DASHBOARD")
 
     print("🚀 ALL SYSTEMS STARTED")
 
