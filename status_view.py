@@ -11,7 +11,19 @@ class StatusView(discord.ui.View):
         self._lock = asyncio.Lock()
 
     # =====================
-    # 💾 UPDATE STATUS CORE (FIXED)
+    # 🔐 ADMIN CHECK (FIXED)
+    # =====================
+    def is_admin(self, interaction):
+
+        role_id = self.bot.brain.role("ADMIN_ROLE")
+        if not role_id:
+            return False
+
+        role = interaction.guild.get_role(int(role_id))
+        return role in interaction.user.roles
+
+    # =====================
+    # 💾 UPDATE STATUS
     # =====================
     async def send_ticket(self, status):
 
@@ -24,31 +36,22 @@ class StatusView(discord.ui.View):
                 if not channel_id:
                     return
 
-                channel_id = int(channel_id)
-
-                channel = self.bot.get_channel(channel_id) or await self.bot.fetch_channel(channel_id)
-
+                channel = self.bot.get_channel(int(channel_id)) or await self.bot.fetch_channel(int(channel_id))
                 if not channel:
                     return
 
-                embed = discord.Embed(
-                    title="📊 STATUS UPDATE",
-                    description=f"Order #{self.order_id}\nสถานะ: `{status}`",
-                    color=0x00ffcc
+                await channel.send(
+                    embed=discord.Embed(
+                        title="📊 STATUS UPDATE",
+                        description=f"Order #{self.order_id}\nสถานะ: `{status}`",
+                        color=0x00ffcc
+                    )
                 )
-
-                await channel.send(embed=embed)
 
                 print(f"[STATUS] {self.order_id} -> {status}")
 
             except Exception as e:
-                print("[STATUS SEND ERROR]", e)
-
-    # =====================
-    # 🔐 PERMISSION CHECK
-    # =====================
-    def is_admin(self, user):
-        return user.guild_permissions.administrator or user.guild_permissions.manage_guild
+                print("[STATUS ERROR]", e)
 
     # =====================
     # ⏳ WAIT ADMIN
@@ -56,11 +59,10 @@ class StatusView(discord.ui.View):
     @discord.ui.button(label="⏳ WAIT ADMIN", style=discord.ButtonStyle.gray, custom_id="wait_admin")
     async def wait_admin(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        if interaction.user.bot:
-            return
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
 
         await self.send_ticket("WAIT_ADMIN")
-
         await interaction.response.send_message("✅ WAIT_ADMIN", ephemeral=True)
 
     # =====================
@@ -69,14 +71,10 @@ class StatusView(discord.ui.View):
     @discord.ui.button(label="👨‍💼 ACCEPT", style=discord.ButtonStyle.green, custom_id="admin_accept")
     async def admin_accept(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        if interaction.user.bot:
-            return
-
-        if not self.is_admin(interaction.user):
-            return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
 
         await self.send_ticket("ADMIN_ACCEPTED")
-
         await interaction.response.send_message("✅ รับออเดอร์แล้ว", ephemeral=True)
 
     # =====================
@@ -85,12 +83,11 @@ class StatusView(discord.ui.View):
     @discord.ui.button(label="🪏 FARMING", style=discord.ButtonStyle.blurple, custom_id="farming")
     async def farming(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        if interaction.user.bot:
-            return
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
 
         await self.send_ticket("FARMING")
-
-        await interaction.response.send_message("🪏 ฟาร์มแล้ว", ephemeral=True)
+        await interaction.response.send_message("🪏 กำลังฟาร์ม", ephemeral=True)
 
     # =====================
     # 📦 WAIT CUSTOMER
@@ -98,24 +95,20 @@ class StatusView(discord.ui.View):
     @discord.ui.button(label="📦 WAIT CUSTOMER", style=discord.ButtonStyle.gray, custom_id="wait_customer")
     async def waiting_customer(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        if interaction.user.bot:
-            return
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
 
         await self.send_ticket("WAIT_CUSTOMER")
-
         await interaction.response.send_message("📦 รอลูกค้า", ephemeral=True)
 
     # =====================
-    # ✅ DONE (FIXED FLOW)
+    # ✅ DONE
     # =====================
     @discord.ui.button(label="✅ DONE", style=discord.ButtonStyle.green, custom_id="done")
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
 
-        if interaction.user.bot:
-            return
-
-        if not self.is_admin(interaction.user):
-            return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
 
@@ -129,5 +122,5 @@ class StatusView(discord.ui.View):
                 await interaction.followup.send("❌ ปิดไม่สำเร็จ", ephemeral=True)
 
         except Exception as e:
-            print("[STATUS DONE ERROR]", e)
+            print("[DONE ERROR]", e)
             await interaction.followup.send("❌ ERROR", ephemeral=True)
