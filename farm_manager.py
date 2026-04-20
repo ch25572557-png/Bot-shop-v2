@@ -3,17 +3,16 @@ import asyncio
 
 class FarmManager:
 
-    def __init__(self, mem, brain, order_system):
+    def __init__(self, mem, order_system):
 
         self.mem = mem
-        self.brain = brain
         self.order_system = order_system
 
         self.queue = asyncio.Queue()
         self.running = False
 
-        # 🔥 protection
         self.processing = set()
+        self.worker_count = 3  # 🔥 scale ได้
 
     # =====================
     # 🚀 START
@@ -24,16 +23,18 @@ class FarmManager:
             return
 
         self.running = True
-        asyncio.create_task(self._worker())
 
-        print("🌾 FARM MANAGER V3 STABLE STARTED")
+        for _ in range(self.worker_count):
+            asyncio.create_task(self._worker())
+
+        print(f"🌾 FARM MANAGER STARTED ({self.worker_count} workers)")
 
     # =====================
-    # ➕ ADD JOB (SAFE)
+    # ➕ ADD JOB
     # =====================
     async def add_job(self, order_id, item, amount):
 
-        # 🔥 prevent duplicate farm
+        # 🔥 กันซ้ำทั้ง queue + processing
         if order_id in self.processing:
             return
 
@@ -44,50 +45,65 @@ class FarmManager:
         })
 
     # =====================
-    # 🔁 WORKER CORE
+    # 🔁 WORKER
     # =====================
     async def _worker(self):
 
         while self.running:
 
             try:
-                job = await self.queue.get()
+                try:
+                    job = await asyncio.wait_for(self.queue.get(), timeout=3)
 
-                order_id = job["order_id"]
-                item = job["item"]
-                amount = job["amount"]
+                    order_id = job["order_id"]
+                    item = job["item"]
+                    amount = job["amount"]
 
-                # 🔥 mark processing
+                except asyncio.TimeoutError:
+                    # 🔥 recovery จาก DB
+                    rows = await self.mem.get_pending_farm(5)
+
+                    if not rows:
+                        await asyncio.sleep(2)
+                        continue
+
+                    order_id, item, amount = rows[0]
+
+                # 🔥 กันซ้ำ
+                if order_id in self.processing:
+                    continue
+
                 self.processing.add(order_id)
 
-                # =====================
-                # 🌾 FARM SIMULATION
-                # =====================
-                await asyncio.sleep(2)
+                try:
+                    # 🔥 เช็คสถานะก่อน
+                    data = await self.mem.get_order(order_id)
+                    if not data:
+                        continue
 
-                # =====================
-                # 📦 ADD STOCK
-                # =====================
-                await self.mem.add_stock(item, amount)
+                    _, _, _, _, status = data
 
-                # =====================
-                # 📊 STATUS UPDATE
-                # =====================
-                await self.mem.update_order_status(order_id, "FARMED")
+                    if status != "FARMING":
+                        continue
 
-                # =====================
-                # 📢 BACK TO ORDER SYSTEM
-                # =====================
-                await self.order_system.send_ticket(
-                    order_id,
-                    "🌾 ฟาร์มเสร็จแล้ว (READY TO SEND)"
-                )
+                    # =====================
+                    # 🌾 FARM
+                    # =====================
+                    await asyncio.sleep(2)
+
+                    await self.mem.add_stock(item, amount)
+
+                    # 🔥 ใช้ READY (สำคัญ)
+                    await self.mem.update_order_status(order_id, "READY")
+
+                    await self.order_system.send_ticket(
+                        order_id,
+                        "🌾 ฟาร์มเสร็จแล้ว พร้อมส่ง"
+                    )
+
+                finally:
+                    self.processing.discard(order_id)
 
             except Exception as e:
-                print("[FARM MANAGER ERROR]", e)
+                print("[FARM ERROR]", e)
                 await asyncio.sleep(2)
-
-            finally:
-                # 🔥 always cleanup
-                if "order_id" in locals():
-                    self.processing.discard(order_id)
