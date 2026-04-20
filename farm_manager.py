@@ -12,7 +12,8 @@ class FarmManager:
         self.running = False
 
         self.processing = set()
-        self.worker_count = 3  # 🔥 scale ได้
+        self.queued = set()  # 🔥 กันซ้ำระดับ queue
+        self.worker_count = 3
 
     # =====================
     # 🚀 START
@@ -24,86 +25,108 @@ class FarmManager:
 
         self.running = True
 
-        for _ in range(self.worker_count):
-            asyncio.create_task(self._worker())
+        for i in range(self.worker_count):
+            asyncio.create_task(self._worker(i))
 
         print(f"🌾 FARM MANAGER STARTED ({self.worker_count} workers)")
 
     # =====================
-    # ➕ ADD JOB
+    # ➕ ADD JOB (SAFE)
     # =====================
     async def add_job(self, order_id, item, amount):
 
-        # 🔥 กันซ้ำทั้ง queue + processing
-        if order_id in self.processing:
+        if order_id in self.processing or order_id in self.queued:
             return
+
+        self.queued.add(order_id)
 
         await self.queue.put({
             "order_id": order_id,
             "item": item,
-            "amount": amount
+            "amount": amount,
+            "retry": 0
         })
 
     # =====================
     # 🔁 WORKER
     # =====================
-    async def _worker(self):
+    async def _worker(self, wid):
 
         while self.running:
 
+            job = None
+
             try:
+                # =====================
+                # 📥 GET JOB
+                # =====================
                 try:
                     job = await asyncio.wait_for(self.queue.get(), timeout=3)
 
-                    order_id = job["order_id"]
-                    item = job["item"]
-                    amount = job["amount"]
-
                 except asyncio.TimeoutError:
-                    # 🔥 recovery จาก DB
+                    # 🔥 recovery multi-job
                     rows = await self.mem.get_pending_farm(5)
 
-                    if not rows:
-                        await asyncio.sleep(2)
-                        continue
+                    for r in rows:
+                        oid, item, amount = r
 
-                    order_id, item, amount = rows[0]
+                        if oid not in self.processing and oid not in self.queued:
+                            await self.add_job(oid, item, amount)
 
-                # 🔥 กันซ้ำ
+                    await asyncio.sleep(1)
+                    continue
+
+                order_id = job["order_id"]
+                item = job["item"]
+                amount = job["amount"]
+                retry = job.get("retry", 0)
+
+                # =====================
+                # 🔒 LOCK ORDER
+                # =====================
                 if order_id in self.processing:
                     continue
 
                 self.processing.add(order_id)
+                self.queued.discard(order_id)
 
-                try:
-                    # 🔥 เช็คสถานะก่อน
-                    data = await self.mem.get_order(order_id)
-                    if not data:
-                        continue
+                # =====================
+                # 🔍 VALIDATE
+                # =====================
+                data = await self.mem.get_order(order_id)
+                if not data:
+                    continue
 
-                    _, _, _, _, status = data
+                _, _, _, _, status = data
 
-                    if status != "FARMING":
-                        continue
+                if status != "FARMING":
+                    continue
 
-                    # =====================
-                    # 🌾 FARM
-                    # =====================
-                    await asyncio.sleep(2)
+                # =====================
+                # 🌾 FARM
+                # =====================
+                await asyncio.sleep(2)
 
-                    await self.mem.add_stock(item, amount)
+                await self.mem.add_stock(item, amount)
 
-                    # 🔥 ใช้ READY (สำคัญ)
-                    await self.mem.update_order_status(order_id, "READY")
+                await self.mem.update_order_status(order_id, "READY")
 
-                    await self.order_system.send_ticket(
-                        order_id,
-                        "🌾 ฟาร์มเสร็จแล้ว พร้อมส่ง"
-                    )
+                await self.order_system.send_ticket(
+                    order_id,
+                    "🌾 ฟาร์มเสร็จแล้ว พร้อมส่ง"
+                )
 
-                finally:
-                    self.processing.discard(order_id)
+                print(f"[FARM OK] #{order_id} by worker {wid}")
 
             except Exception as e:
                 print("[FARM ERROR]", e)
-                await asyncio.sleep(2)
+
+                # 🔥 retry (max 3)
+                if job and job.get("retry", 0) < 3:
+                    job["retry"] += 1
+                    await self.queue.put(job)
+
+            finally:
+                if job:
+                    self.processing.discard(job["order_id"])
+                    self.queue.task_done()
