@@ -1,5 +1,6 @@
 import discord
 import asyncio
+import time
 
 
 class StatusView(discord.ui.View):
@@ -10,8 +11,11 @@ class StatusView(discord.ui.View):
         self.order_id = order_id
         self._lock = asyncio.Lock()
 
+        # 🔥 anti spam
+        self.cooldown = {}
+
     # =====================
-    # 🔐 ADMIN CHECK (PRODUCTION)
+    # 🔐 ADMIN CHECK
     # =====================
     def is_admin(self, interaction: discord.Interaction):
 
@@ -27,16 +31,26 @@ class StatusView(discord.ui.View):
             return False
 
     # =====================
-    # 🧠 GET ORDER ID FROM CHANNEL (🔥 FIX สำคัญ)
+    # 🧠 GET ORDER
     # =====================
     async def get_order_id(self, interaction):
-
-        # ใช้ channel เป็นหลัก (กัน view bug ตอน restart)
-        order_id = await self.bot.mem.get_order_by_channel(str(interaction.channel.id))
-        return order_id
+        return await self.bot.mem.get_order_by_channel(str(interaction.channel.id))
 
     # =====================
-    # 💾 UPDATE STATUS
+    # 🚫 SPAM PROTECTION
+    # =====================
+    def check_cooldown(self, user_id):
+        now = time.time()
+
+        if user_id in self.cooldown:
+            if now - self.cooldown[user_id] < 2:
+                return False
+
+        self.cooldown[user_id] = now
+        return True
+
+    # =====================
+    # 💾 UPDATE STATUS (SAFE)
     # =====================
     async def send_ticket(self, interaction, status):
 
@@ -45,7 +59,14 @@ class StatusView(discord.ui.View):
             try:
                 order_id = await self.get_order_id(interaction)
                 if not order_id:
-                    return
+                    return False
+
+                # 🔥 check status ซ้ำ
+                data = await self.bot.mem.get_order(order_id)
+                if data:
+                    _, _, _, _, current_status = data
+                    if current_status == status:
+                        return False
 
                 await self.bot.mem.update_order_status(order_id, status)
 
@@ -57,10 +78,13 @@ class StatusView(discord.ui.View):
                     )
                 )
 
-                print(f"[STATUS] {order_id} -> {status}")
+                print(f"[STATUS] {order_id} -> {status} by {interaction.user}")
+
+                return True
 
             except Exception as e:
                 print("[STATUS ERROR]", e)
+                return False
 
     # =====================
     # ⏳ WAIT ADMIN
@@ -71,8 +95,17 @@ class StatusView(discord.ui.View):
         if not self.is_admin(interaction):
             return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
 
-        await self.send_ticket(interaction, "WAIT_ADMIN")
-        await interaction.response.send_message("✅ WAIT_ADMIN", ephemeral=True)
+        if not self.check_cooldown(interaction.user.id):
+            return await interaction.response.send_message("⏳ กดเร็วเกินไป", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        ok = await self.send_ticket(interaction, "WAIT_ADMIN")
+
+        if ok:
+            await interaction.followup.send("✅ WAIT_ADMIN", ephemeral=True)
+        else:
+            await interaction.followup.send("⚠️ สถานะซ้ำ", ephemeral=True)
 
     # =====================
     # 👨‍💼 ACCEPT
@@ -83,8 +116,17 @@ class StatusView(discord.ui.View):
         if not self.is_admin(interaction):
             return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
 
-        await self.send_ticket(interaction, "ADMIN_ACCEPTED")
-        await interaction.response.send_message("✅ รับออเดอร์แล้ว", ephemeral=True)
+        if not self.check_cooldown(interaction.user.id):
+            return await interaction.response.send_message("⏳ กดเร็วเกินไป", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        ok = await self.send_ticket(interaction, "ADMIN_ACCEPTED")
+
+        if ok:
+            await interaction.followup.send("✅ รับออเดอร์แล้ว", ephemeral=True)
+        else:
+            await interaction.followup.send("⚠️ สถานะซ้ำ", ephemeral=True)
 
     # =====================
     # 🪏 FARMING
@@ -95,8 +137,17 @@ class StatusView(discord.ui.View):
         if not self.is_admin(interaction):
             return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
 
-        await self.send_ticket(interaction, "FARMING")
-        await interaction.response.send_message("🪏 กำลังฟาร์ม", ephemeral=True)
+        if not self.check_cooldown(interaction.user.id):
+            return await interaction.response.send_message("⏳ กดเร็วเกินไป", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        ok = await self.send_ticket(interaction, "FARMING")
+
+        if ok:
+            await interaction.followup.send("🪏 กำลังฟาร์ม", ephemeral=True)
+        else:
+            await interaction.followup.send("⚠️ สถานะซ้ำ", ephemeral=True)
 
     # =====================
     # 📦 WAIT CUSTOMER
@@ -107,17 +158,29 @@ class StatusView(discord.ui.View):
         if not self.is_admin(interaction):
             return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
 
-        await self.send_ticket(interaction, "WAIT_CUSTOMER")
-        await interaction.response.send_message("📦 รอลูกค้า", ephemeral=True)
+        if not self.check_cooldown(interaction.user.id):
+            return await interaction.response.send_message("⏳ กดเร็วเกินไป", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        ok = await self.send_ticket(interaction, "WAIT_CUSTOMER")
+
+        if ok:
+            await interaction.followup.send("📦 รอลูกค้า", ephemeral=True)
+        else:
+            await interaction.followup.send("⚠️ สถานะซ้ำ", ephemeral=True)
 
     # =====================
-    # ✅ DONE (SAFE FINAL)
+    # ✅ DONE
     # =====================
     @discord.ui.button(label="✅ DONE", style=discord.ButtonStyle.green, custom_id="done")
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         if not self.is_admin(interaction):
             return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
+
+        if not self.check_cooldown(interaction.user.id):
+            return await interaction.response.send_message("⏳ กดเร็วเกินไป", ephemeral=True)
 
         await interaction.response.defer(ephemeral=True)
 
