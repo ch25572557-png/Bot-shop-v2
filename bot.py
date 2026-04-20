@@ -60,8 +60,8 @@ bot.order = OrderSystem(
     bot
 )
 
-# 🔥 FARM MANAGER
-bot.farm = FarmManager(bot.mem, bot.brain, bot.order)
+# 🔥 FIX: FarmManager arg ให้ตรง class
+bot.farm = FarmManager(bot.mem, bot.order)
 bot.order.farm_manager = bot.farm
 
 bot.stock_alert = StockAlertSystem(bot)
@@ -81,16 +81,17 @@ async def on_ready():
     print(f"🟢 LOGGED IN AS {bot.user}")
 
     # =====================
-    # 🧠 MEMORY INIT
+    # 🧠 MEMORY INIT (SAFE)
     # =====================
     try:
         await bot.mem.init()
         print("🧠 MEMORY INIT DONE")
     except Exception as e:
         print("[MEM INIT ERROR]", e)
+        return  # ❗ หยุดเลย ป้องกันระบบพัง
 
     # =====================
-    # 🎛 VIEWS (FIX)
+    # 🎛 VIEWS (สำคัญมาก)
     # =====================
     try:
         bot.add_view(ShopView(bot))
@@ -99,7 +100,7 @@ async def on_ready():
         bot.add_view(StockView(bot))
         bot.add_view(AdminDashboard(bot))
 
-        # 🔥 FIX: ใช้ None แทน 0
+        # 🔥 ทำให้ปุ่ม ticket ใช้ได้หลังรีสตาร์ท
         bot.add_view(StatusView(bot, None))
 
         print("🎛 VIEWS REGISTERED")
@@ -109,7 +110,7 @@ async def on_ready():
     # =====================
     # 🚀 START SYSTEMS
     # =====================
-    async def run(fn, name="SYSTEM"):
+    async def run(fn, name):
         try:
             result = fn()
             if asyncio.iscoroutine(result):
@@ -121,7 +122,7 @@ async def on_ready():
     await run(bot.stock.start, "STOCK")
     await run(bot.order.start, "ORDER")
 
-    # 🔥 safe farm start
+    # 🔥 start farm
     if bot.order.farm_manager:
         await run(bot.farm.start, "FARM")
 
