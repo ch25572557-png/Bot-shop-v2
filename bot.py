@@ -21,6 +21,10 @@ from stock_view import StockView
 from stock_alert import StockAlertSystem
 from dashboard_worker import DashboardWorker
 
+# ✅ เพิ่ม
+from status_view import StatusView
+from farm_manager import FarmManager
+
 
 # =====================
 # 🔥 INTENTS
@@ -37,16 +41,15 @@ bot.mem = Memory()
 
 
 # =====================
-# 📦 SYSTEMS (FIXED)
+# 📦 SYSTEMS
 # =====================
-bot.stock = StockSystem(bot.mem, bot.brain, bot, None)  
-# ⚠️ notify ใส่ทีหลังด้านล่าง
+bot.stock = StockSystem(bot.mem, bot.brain, bot, None)
 
 bot.ticket = TicketSystem(bot.brain, bot)
 bot.notify = NotifySystem(bot.brain, bot)
 bot.backup = BackupSystem(bot.brain, bot)
 
-# 🔥 FIX: inject notify เข้า stock
+# inject notify
 bot.stock.notify = bot.notify
 
 bot.order = OrderSystem(
@@ -57,6 +60,10 @@ bot.order = OrderSystem(
     bot.brain,
     bot
 )
+
+# 🔥 NEW: farm manager
+bot.farm = FarmManager(bot.mem, bot.brain, bot.order)
+bot.order.farm_manager = bot.farm
 
 bot.stock_alert = StockAlertSystem(bot)
 bot.dashboard = DashboardWorker(bot)
@@ -84,7 +91,7 @@ async def on_ready():
         print("[MEM INIT ERROR]", e)
 
     # =====================
-    # 🎛 VIEWS
+    # 🎛 VIEWS (🔥 FIX สำคัญ)
     # =====================
     try:
         bot.add_view(ShopView(bot))
@@ -92,12 +99,16 @@ async def on_ready():
         bot.add_view(CancelView(bot))
         bot.add_view(StockView(bot))
         bot.add_view(AdminDashboard(bot))
+
+        # 🔥 สำคัญสุด: ทำให้ปุ่ม ticket ไม่หาย
+        bot.add_view(StatusView(bot, 0))
+
         print("🎛 VIEWS REGISTERED")
     except Exception as e:
         print("[VIEW ERROR]", e)
 
     # =====================
-    # 🚀 START SYSTEMS SAFE
+    # 🚀 START SYSTEMS
     # =====================
     async def run(fn):
         try:
@@ -109,6 +120,7 @@ async def on_ready():
 
     await run(bot.stock.start)
     await run(bot.order.start)
+    await run(bot.farm.start)          # 🔥 NEW
     await run(bot.stock_alert.start)
     await run(bot.dashboard.start)
 
