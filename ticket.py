@@ -8,120 +8,101 @@ class TicketSystem:
         self.brain = brain
         self.bot = bot
 
-    # =====================
-    # 📢 ADMIN SEND
-    # =====================
     async def send_to_admin(self, guild, title, desc):
-
         try:
             ch_id = self.brain.channel("ORDER_NOTIFY")
             if not ch_id:
                 return
 
-            ch_id = int(ch_id)
-
-            channel = self.bot.get_channel(ch_id) or await self.bot.fetch_channel(ch_id)
+            channel = self.bot.get_channel(int(ch_id)) or await self.bot.fetch_channel(int(ch_id))
 
             if channel:
-                embed = discord.Embed(
+                await channel.send(embed=discord.Embed(
                     title=title,
                     description=desc,
                     color=0x00ffcc
-                )
-                await channel.send(embed=embed)
-
+                ))
         except Exception as e:
             print("[ADMIN SEND ERROR]", e)
 
-    # =====================
-    # 🎫 CREATE TICKET (FIXED FINAL)
-    # =====================
     async def create(self, guild, user, order_id, interaction=None):
 
+        # =====================
+        # 📁 CATEGORY
+        # =====================
         category = None
-
-        # =====================
-        # 📁 CATEGORY FIX (SAFE)
-        # =====================
         try:
-            category_id = self.brain.channel("TICKET_CATEGORY")
-
-            if category_id:
-                category_id = int(category_id)
-                category = discord.utils.get(guild.categories, id=category_id)
-
-        except Exception as e:
-            print("[CATEGORY ERROR]", e)
-
-        # =====================
-        # 👑 ROLE FIX
-        # =====================
-        admin_role = None
-
-        try:
-            role_id = self.brain.role("ADMIN_ROLE")
-            if role_id:
-                admin_role = guild.get_role(int(role_id))
+            cid = self.brain.channel("TICKET_CATEGORY")
+            if cid:
+                category = discord.utils.get(guild.categories, id=int(cid))
         except:
             pass
 
         # =====================
-        # 🔒 PERMISSIONS
+        # 👑 ADMIN ROLE
+        # =====================
+        admin_role = None
+        try:
+            rid = self.brain.role("ADMIN_ROLE")
+            if rid:
+                admin_role = guild.get_role(int(rid))
+        except:
+            pass
+
+        # =====================
+        # 🔒 PERMISSIONS (FINAL)
         # =====================
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            guild.me: discord.PermissionOverwrite(view_channel=True),
+
+            guild.me: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True
+            ),
         }
 
-        # user fix (รองรับทั้ง Member และ string)
+        # 👤 ลูกค้า
         if isinstance(user, discord.Member):
-            overwrites[user] = discord.PermissionOverwrite(view_channel=True)
+            overwrites[user] = discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True
+            )
 
+        # 👑 แอดมิน
         if admin_role:
-            overwrites[admin_role] = discord.PermissionOverwrite(view_channel=True)
+            overwrites[admin_role] = discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages=True,
+                read_message_history=True
+            )
 
         # =====================
         # 🧱 CREATE CHANNEL
         # =====================
         try:
             channel = await guild.create_text_channel(
-                name=f"ticket-{order_id}",
+                name=f"order-{order_id}",
                 category=category,
                 overwrites=overwrites
             )
-
         except Exception as e:
             print("[TICKET CREATE ERROR]", e)
-
-            if interaction and not interaction.response.is_done():
-                await interaction.response.send_message(
-                    "❌ สร้างทิกเก็ตไม่สำเร็จ",
-                    ephemeral=True
-                )
-
             return None
 
-        # =====================
-        # 💾 SAVE
-        # =====================
-        try:
-            await self.bot.mem.save_ticket(order_id, str(channel.id))
-        except:
-            pass
+        await self.bot.mem.save_ticket(order_id, str(channel.id))
 
         # =====================
-        # 📦 ORDER DATA
+        # 📦 DATA
         # =====================
         item = "Unknown"
         amount = 1
         roblox_user = None
 
-        try:
-            data = await self.bot.mem.get_order(order_id)
-            if data:
-                _, item, amount, roblox_user, _ = data
-        except:
-            pass
+        data = await self.bot.mem.get_order(order_id)
+        if data:
+            _, item, amount, roblox_user, _ = data
 
         # =====================
         # 📢 ADMIN NOTIFY
@@ -129,7 +110,7 @@ class TicketSystem:
         await self.send_to_admin(
             guild,
             "🆕 NEW ORDER",
-            f"Order #{order_id}\nUser: {getattr(user, 'name', str(user))}\nItem: {item} x{amount}"
+            f"Order #{order_id}\nUser: {getattr(user,'name',user)}\nItem: {item} x{amount}"
         )
 
         # =====================
@@ -141,22 +122,13 @@ class TicketSystem:
             color=0x3498db
         )
 
-        embed.add_field(
-            name="👤 User",
-            value=getattr(user, "mention", str(user)),
-            inline=False
-        )
-
+        embed.add_field(name="👤 User", value=getattr(user, "mention", str(user)), inline=False)
         embed.add_field(name="📦 Item", value=f"{item} x{amount}", inline=False)
 
         if roblox_user:
             embed.add_field(name="🎮 Roblox", value=roblox_user, inline=False)
 
-        embed.add_field(
-            name="📊 Status",
-            value="⏳ รอแอดมินรับออเดอร์",
-            inline=False
-        )
+        embed.add_field(name="📊 Status", value="⏳ รอแอดมินรับออเดอร์", inline=False)
 
         # =====================
         # 🔘 VIEW
