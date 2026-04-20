@@ -16,7 +16,7 @@ class Memory:
         # 🔥 PERFORMANCE + STABILITY
         await self.db.execute("PRAGMA journal_mode=WAL")
         await self.db.execute("PRAGMA synchronous=NORMAL")
-        await self.db.execute("PRAGMA busy_timeout=5000")  # 🔥 กัน DB lock
+        await self.db.execute("PRAGMA busy_timeout=5000")
 
         # =====================
         # 📦 TABLES
@@ -54,14 +54,14 @@ class Memory:
         )
         """)
 
-        # 🔥 INDEX (สำคัญตอน scale)
+        # 🔥 INDEX
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
         await self.db.execute("CREATE INDEX IF NOT EXISTS idx_tickets_channel ON tickets(channel_id)")
 
         await self.db.commit()
 
     # =====================
-    # ⚙️ EXEC (SAFE)
+    # ⚙️ EXEC SAFE (FIXED)
     # =====================
     async def execute(self, query, params=(), fetch=False, one=False):
 
@@ -69,15 +69,15 @@ class Memory:
             try:
                 cur = await self.db.execute(query, params)
 
-                if fetch:
-                    rows = await cur.fetchall()
-                    await cur.close()
-                    return rows
-
                 if one:
                     row = await cur.fetchone()
                     await cur.close()
                     return row
+
+                if fetch:
+                    rows = await cur.fetchall()
+                    await cur.close()
+                    return rows
 
                 await self.db.commit()
                 await cur.close()
@@ -94,13 +94,13 @@ class Memory:
 
         amount = max(int(amount or 1), 1)
 
-        async with self.lock:
-            cur = await self.db.execute(
-                "INSERT INTO orders(user,item,amount,roblox_user,status) VALUES(?,?,?,?,?)",
-                (user, item, amount, roblox_user, status)
-            )
-            await self.db.commit()
-            return cur.lastrowid
+        # ❌ ไม่ใช้ lock ซ้อน
+        cur = await self.db.execute(
+            "INSERT INTO orders(user,item,amount,roblox_user,status) VALUES(?,?,?,?,?)",
+            (user, item, amount, roblox_user, status)
+        )
+        await self.db.commit()
+        return cur.lastrowid
 
     async def get_order(self, order_id):
         return await self.execute(
@@ -150,16 +150,10 @@ class Memory:
             one=True
         )
 
-        if not row:
-            return None
-
-        try:
-            return int(row[0])
-        except:
-            return None
+        return int(row[0]) if row else None
 
     # =====================
-    # 📦 STOCK (SAFE)
+    # 📦 STOCK
     # =====================
     def _norm(self, item):
         return str(item).strip().lower()
@@ -175,8 +169,7 @@ class Memory:
                 (amount, item, amount)
             )
             await self.db.commit()
-
-            return cur.rowcount > 0  # 🔥 atomic success check
+            return cur.rowcount > 0
 
     async def add_stock(self, item, amount):
 
@@ -200,16 +193,13 @@ class Memory:
             one=True
         )
 
-        return int(row[0]) if row and row[0] else 0
+        return int(row[0]) if row else 0
 
     async def get_all_stock(self):
-
-        rows = await self.execute(
+        return await self.execute(
             "SELECT name,qty FROM stock",
             fetch=True
-        )
-
-        return rows or []
+        ) or []
 
     # =====================
     # 💰 POINTS
@@ -232,3 +222,10 @@ class Memory:
         )
 
         return int(row[0]) if row else 0
+
+    # =====================
+    # 🔌 CLOSE (OPTIONAL)
+    # =====================
+    async def close(self):
+        if self.db:
+            await self.db.close()
