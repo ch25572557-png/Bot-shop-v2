@@ -12,9 +12,15 @@ class Memory:
     async def init(self):
 
         self.db = await aiosqlite.connect(self.db_path)
+
+        # 🔥 PERFORMANCE + STABILITY
         await self.db.execute("PRAGMA journal_mode=WAL")
         await self.db.execute("PRAGMA synchronous=NORMAL")
+        await self.db.execute("PRAGMA busy_timeout=5000")  # 🔥 กัน DB lock
 
+        # =====================
+        # 📦 TABLES
+        # =====================
         await self.db.execute("""
         CREATE TABLE IF NOT EXISTS orders(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -48,32 +54,41 @@ class Memory:
         )
         """)
 
+        # 🔥 INDEX (สำคัญตอน scale)
+        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status)")
+        await self.db.execute("CREATE INDEX IF NOT EXISTS idx_tickets_channel ON tickets(channel_id)")
+
         await self.db.commit()
 
     # =====================
-    # ⚙️ EXEC
+    # ⚙️ EXEC (SAFE)
     # =====================
     async def execute(self, query, params=(), fetch=False, one=False):
 
         async with self.lock:
-            cur = await self.db.execute(query, params)
+            try:
+                cur = await self.db.execute(query, params)
 
-            if fetch:
-                rows = await cur.fetchall()
+                if fetch:
+                    rows = await cur.fetchall()
+                    await cur.close()
+                    return rows
+
+                if one:
+                    row = await cur.fetchone()
+                    await cur.close()
+                    return row
+
+                await self.db.commit()
                 await cur.close()
-                return rows
+                return None
 
-            if one:
-                row = await cur.fetchone()
-                await cur.close()
-                return row
-
-            await self.db.commit()
-            await cur.close()
-            return None
+            except Exception as e:
+                print("[DB ERROR]", e)
+                return None
 
     # =====================
-    # 🛒 ORDER (FIXED)
+    # 🛒 ORDER
     # =====================
     async def add_order(self, user, item, amount=1, roblox_user=None, status="PENDING"):
 
@@ -98,6 +113,13 @@ class Memory:
         await self.execute(
             "UPDATE orders SET status=? WHERE id=?",
             (status, order_id)
+        )
+
+    async def get_pending_farm(self, limit=10):
+        return await self.execute(
+            "SELECT id,item,amount FROM orders WHERE status='FARMING' LIMIT ?",
+            (limit,),
+            fetch=True
         )
 
     async def get_order_by_channel(self, channel_id):
@@ -137,7 +159,7 @@ class Memory:
             return None
 
     # =====================
-    # 📦 STOCK (FARM V3 SAFE MODE)
+    # 📦 STOCK (SAFE)
     # =====================
     def _norm(self, item):
         return str(item).strip().lower()
@@ -153,7 +175,8 @@ class Memory:
                 (amount, item, amount)
             )
             await self.db.commit()
-            return cur.rowcount > 0
+
+            return cur.rowcount > 0  # 🔥 atomic success check
 
     async def add_stock(self, item, amount):
 
