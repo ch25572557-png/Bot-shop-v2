@@ -15,7 +15,6 @@ class OrderSystem:
         self.processing = set()
         self._lock = asyncio.Lock()
 
-        # 🔥 inject ทีหลังจาก bot.py
         self.farm_manager = None
 
     # =====================
@@ -43,7 +42,7 @@ class OrderSystem:
             print("[TICKET ERROR]", e)
 
     # =====================
-    # 🛒 CREATE ORDER
+    # 🛒 CREATE ORDER (ไม่ผูก stock แล้ว)
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
@@ -61,18 +60,11 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # 🔥 เช็ค stock
-        stock = await self.mem.get_stock(item)
+        # 🔥 ไม่เช็ค stock แล้ว → ไป FARMING ตรง
+        await self.mem.update_order_status(order_id, "FARMING")
 
-        if stock >= amount:
-            await self.mem.update_order_status(order_id, "READY")
-            await self.send_ticket(order_id, "📦 ของพร้อมส่ง")
-        else:
-            await self.mem.update_order_status(order_id, "FARMING")
-
-            # 🔥 ใช้ farm_manager
-            if self.farm_manager:
-                await self.farm_manager.add_job(order_id, item, amount)
+        if self.farm_manager:
+            await self.farm_manager.add_job(order_id, item, amount)
 
         await self.notify.admin(user, item, order_id)
         await self.backup.log(f"ORDER #{order_id} | {user} | {item} x{amount}")
@@ -81,7 +73,7 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # ✅ COMPLETE ORDER
+    # ✅ COMPLETE ORDER (🔥 FIX ใหญ่)
     # =====================
     async def complete(self, channel):
 
@@ -102,18 +94,9 @@ class OrderSystem:
                     return False
 
                 user, item, amount, roblox_user, status = data
-                item = item.lower().strip()
 
-                if status != "READY":
-                    await channel.send("❌ ยังไม่พร้อมส่ง")
-                    return False
-
-                # 🔥 ตัด stock แบบ atomic
-                ok = await self.mem.minus_stock(item, amount)
-
-                if not ok:
-                    await channel.send("❌ stock ไม่พอ")
-                    return False
+                # 🔥 ไม่เช็ค READY แล้ว
+                # 🔥 ไม่ใช้ stock แล้ว
 
                 await self.mem.update_order_status(order_id, "DONE")
 
