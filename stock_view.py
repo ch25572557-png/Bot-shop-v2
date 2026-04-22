@@ -30,10 +30,13 @@ class RestockModal(discord.ui.Modal):
                     ephemeral=True
                 )
 
-            await self.bot.mem.add_stock(self.item, qty)
+            # 🔥 FIX: normalize กันชื่อมั่ว
+            item = self.bot.mem._norm(self.item)
+
+            await self.bot.mem.add_stock(item, qty)
 
             await interaction.response.send_message(
-                f"✅ เติมสต๊อก: {self.item} +{qty}",
+                f"✅ เติมสต๊อก: {item} +{qty}",
                 ephemeral=True
             )
 
@@ -45,36 +48,24 @@ class RestockModal(discord.ui.Modal):
 
 
 # =====================
-# 📦 SELECT ITEM (FIXED)
+# 📦 SELECT ITEM (FIXED 100%)
 # =====================
 class StockSelect(discord.ui.Select):
 
-    def __init__(self, bot):
+    def __init__(self, bot, items):
         self.bot = bot
 
         options = []
 
-        items = []  # 🔥 FIX: ไม่ใช้ asyncio.run
-
-        # safe fetch (sync-safe workaround)
-        try:
-            loop = bot.loop
-            items = loop.create_task(self._get_items_safe())
-        except:
-            items = []
-
-        # fallback sync load
-        if hasattr(items, "done"):
-            items = []
-
-        # options build (safe fallback)
-        if isinstance(items, list) and items:
-            for name in items[:25]:
+        if items:
+            for name, qty in items[:25]:
                 options.append(
-                    discord.SelectOption(label=name, value=name)
+                    discord.SelectOption(
+                        label=f"{name} ({qty})",
+                        value=name
+                    )
                 )
-
-        if not options:
+        else:
             options = [
                 discord.SelectOption(
                     label="ไม่มีสินค้าในสต๊อก",
@@ -89,13 +80,6 @@ class StockSelect(discord.ui.Select):
             min_values=1,
             max_values=1
         )
-
-    async def _get_items_safe(self):
-        try:
-            data = await self.bot.mem.get_all_stock()
-            return [i[0] for i in data] if data else []
-        except:
-            return []
 
     async def callback(self, interaction: discord.Interaction):
 
@@ -113,11 +97,11 @@ class StockSelect(discord.ui.Select):
 
 
 # =====================
-# 📦 VIEW (PERSISTENT FIX)
+# 📦 VIEW (FIXED)
 # =====================
 class StockView(discord.ui.View):
 
-    def __init__(self, bot):
+    def __init__(self, bot, items):
         super().__init__(timeout=None)
         self.bot = bot
-        self.add_item(StockSelect(bot))
+        self.add_item(StockSelect(bot, items))
