@@ -50,7 +50,7 @@ class StatusView(discord.ui.View):
         return True
 
     # =====================
-    # 💾 UPDATE STATUS (SAFE)
+    # 💾 UPDATE STATUS
     # =====================
     async def send_ticket(self, interaction, status):
 
@@ -61,7 +61,6 @@ class StatusView(discord.ui.View):
                 if not order_id:
                     return False
 
-                # 🔥 check status ซ้ำ
                 data = await self.bot.mem.get_order(order_id)
                 if data:
                     _, _, _, _, current_status = data
@@ -77,8 +76,6 @@ class StatusView(discord.ui.View):
                         color=0x00ffcc
                     )
                 )
-
-                print(f"[STATUS] {order_id} -> {status} by {interaction.user}")
 
                 return True
 
@@ -102,10 +99,7 @@ class StatusView(discord.ui.View):
 
         ok = await self.send_ticket(interaction, "WAIT_ADMIN")
 
-        if ok:
-            await interaction.followup.send("✅ WAIT_ADMIN", ephemeral=True)
-        else:
-            await interaction.followup.send("⚠️ สถานะซ้ำ", ephemeral=True)
+        await interaction.followup.send("✅ WAIT_ADMIN" if ok else "⚠️ สถานะซ้ำ", ephemeral=True)
 
     # =====================
     # 👨‍💼 ACCEPT
@@ -123,10 +117,7 @@ class StatusView(discord.ui.View):
 
         ok = await self.send_ticket(interaction, "ADMIN_ACCEPTED")
 
-        if ok:
-            await interaction.followup.send("✅ รับออเดอร์แล้ว", ephemeral=True)
-        else:
-            await interaction.followup.send("⚠️ สถานะซ้ำ", ephemeral=True)
+        await interaction.followup.send("✅ รับออเดอร์แล้ว" if ok else "⚠️ สถานะซ้ำ", ephemeral=True)
 
     # =====================
     # 🪏 FARMING
@@ -144,10 +135,37 @@ class StatusView(discord.ui.View):
 
         ok = await self.send_ticket(interaction, "FARMING")
 
-        if ok:
-            await interaction.followup.send("🪏 กำลังฟาร์ม", ephemeral=True)
-        else:
-            await interaction.followup.send("⚠️ สถานะซ้ำ", ephemeral=True)
+        await interaction.followup.send("🪏 กำลังฟาร์ม" if ok else "⚠️ สถานะซ้ำ", ephemeral=True)
+
+    # =====================
+    # ✅ READY (🔥 ใหม่)
+    # =====================
+    @discord.ui.button(label="✅ READY", style=discord.ButtonStyle.green, custom_id="ready")
+    async def ready(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if not self.is_admin(interaction):
+            return await interaction.response.send_message("❌ แอดมินเท่านั้น", ephemeral=True)
+
+        if not self.check_cooldown(interaction.user.id):
+            return await interaction.response.send_message("⏳ กดเร็วเกินไป", ephemeral=True)
+
+        await interaction.response.defer(ephemeral=True)
+
+        order_id = await self.get_order_id(interaction)
+        if not order_id:
+            return await interaction.followup.send("❌ ไม่พบออเดอร์", ephemeral=True)
+
+        await self.bot.mem.update_order_status(order_id, "READY")
+
+        await interaction.channel.send(
+            embed=discord.Embed(
+                title="📦 READY",
+                description=f"Order #{order_id}\nของพร้อมส่งแล้ว",
+                color=0x2ecc71
+            )
+        )
+
+        await interaction.followup.send("✅ ตั้งเป็น READY แล้ว", ephemeral=True)
 
     # =====================
     # 📦 WAIT CUSTOMER
@@ -165,13 +183,10 @@ class StatusView(discord.ui.View):
 
         ok = await self.send_ticket(interaction, "WAIT_CUSTOMER")
 
-        if ok:
-            await interaction.followup.send("📦 รอลูกค้า", ephemeral=True)
-        else:
-            await interaction.followup.send("⚠️ สถานะซ้ำ", ephemeral=True)
+        await interaction.followup.send("📦 รอลูกค้า" if ok else "⚠️ สถานะซ้ำ", ephemeral=True)
 
     # =====================
-    # ✅ DONE
+    # ✅ DONE (🔥 FIX แล้ว)
     # =====================
     @discord.ui.button(label="✅ DONE", style=discord.ButtonStyle.green, custom_id="done")
     async def done(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -185,7 +200,7 @@ class StatusView(discord.ui.View):
         await interaction.response.defer(ephemeral=True)
 
         try:
-            success = await self.bot.order.complete(interaction.channel)
+            success = await self.bot.order.complete(interaction.channel, interaction)
 
             if success:
                 await self.send_ticket(interaction, "DONE")
