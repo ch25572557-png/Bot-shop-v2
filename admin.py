@@ -17,22 +17,23 @@ class AddModal(discord.ui.Modal, title="➕ เพิ่มสินค้า"):
     async def on_submit(self, interaction: discord.Interaction):
 
         try:
-            name = self.name.value.strip()
+            name = self.name.value.strip().lower()
             price = float(self.price.value)
             qty = int(self.stock.value)
 
             if price < 0 or qty <= 0:
                 raise ValueError
 
-            self.bot.stock.add(name, qty, price)
+            # 🔥 FIX: ใช้ memory โดยตรง
+            await self.bot.mem.add_stock(name, qty)
 
             await interaction.response.send_message(
-                f"✅ เพิ่มสินค้า {name}",
+                f"✅ เพิ่มสินค้า {name} ({qty})",
                 ephemeral=True
             )
 
-        except:
-            await interaction.response.send_message("❌ ข้อมูลไม่ถูกต้อง", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
 
 class CancelModal(discord.ui.Modal, title="❌ ยกเลิกออเดอร์"):
@@ -47,19 +48,21 @@ class CancelModal(discord.ui.Modal, title="❌ ยกเลิกออเดอ
 
         try:
             order_id = int(self.order_id.value)
-            order = self.bot.mem.get_order(order_id)
 
+            order = await self.bot.mem.get_order(order_id)
             if not order:
                 return await interaction.response.send_message("❌ ไม่พบออเดอร์", ephemeral=True)
 
             user, item, amount, _, status = order
 
-            self.bot.mem.update_order_status(order_id, "CANCELLED")
-            self.bot.mem.add_stock(item, amount)
+            await self.bot.mem.update_order_status(order_id, "CANCELLED")
 
-            # 🔥 ปิดห้องด้วย
+            # 🔥 คืนของเข้าสต๊อก
+            await self.bot.mem.add_stock(item, amount)
+
+            # 🔥 ปิดห้อง
             try:
-                ch_id = self.bot.mem.get_ticket(order_id)
+                ch_id = await self.bot.mem.get_ticket(order_id)
                 if ch_id:
                     ch = self.bot.get_channel(int(ch_id))
                     if ch:
@@ -72,8 +75,8 @@ class CancelModal(discord.ui.Modal, title="❌ ยกเลิกออเดอ
                 ephemeral=True
             )
 
-        except:
-            await interaction.response.send_message("❌ error", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
 
 class RestockModal(discord.ui.Modal, title="🔄 รีสต็อก"):
@@ -88,25 +91,25 @@ class RestockModal(discord.ui.Modal, title="🔄 รีสต็อก"):
     async def on_submit(self, interaction: discord.Interaction):
 
         try:
-            name = self.name.value.strip()
+            name = self.name.value.strip().lower()
             qty = int(self.amount.value)
 
             if qty <= 0:
                 raise ValueError
 
-            self.bot.mem.add_stock(name, qty)
+            await self.bot.mem.add_stock(name, qty)
 
             await interaction.response.send_message(
                 f"✅ รีสต็อก {name} +{qty}",
                 ephemeral=True
             )
 
-        except:
-            await interaction.response.send_message("❌ ข้อมูลผิด", ephemeral=True)
+        except Exception as e:
+            await interaction.response.send_message(f"❌ {e}", ephemeral=True)
 
 
 # =====================
-# 👑 ADMIN VIEW (PERSISTENT)
+# 👑 ADMIN VIEW
 # =====================
 
 class AdminView(discord.ui.View):
@@ -124,11 +127,7 @@ class AdminView(discord.ui.View):
             return False
 
     # ➕ ADD
-    @discord.ui.button(
-        label="➕ เพิ่มสินค้า",
-        style=discord.ButtonStyle.green,
-        custom_id="admin_add"
-    )
+    @discord.ui.button(label="➕ เพิ่มสินค้า", style=discord.ButtonStyle.green, custom_id="admin_add")
     async def add(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         if not self.is_admin(interaction):
@@ -137,11 +136,7 @@ class AdminView(discord.ui.View):
         await interaction.response.send_modal(AddModal(self.bot))
 
     # ❌ CANCEL
-    @discord.ui.button(
-        label="❌ ยกเลิกออเดอร์",
-        style=discord.ButtonStyle.red,
-        custom_id="admin_cancel"
-    )
+    @discord.ui.button(label="❌ ยกเลิกออเดอร์", style=discord.ButtonStyle.red, custom_id="admin_cancel")
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         if not self.is_admin(interaction):
@@ -150,11 +145,7 @@ class AdminView(discord.ui.View):
         await interaction.response.send_modal(CancelModal(self.bot))
 
     # 🔄 RESTOCK
-    @discord.ui.button(
-        label="🔄 รีสต็อก",
-        style=discord.ButtonStyle.blurple,
-        custom_id="admin_restock"
-    )
+    @discord.ui.button(label="🔄 รีสต็อก", style=discord.ButtonStyle.blurple, custom_id="admin_restock")
     async def restock(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         if not self.is_admin(interaction):
@@ -162,29 +153,22 @@ class AdminView(discord.ui.View):
 
         await interaction.response.send_modal(RestockModal(self.bot))
 
-    # 📊 VIEW STOCK
-    @discord.ui.button(
-        label="📊 ดูสต๊อก",
-        style=discord.ButtonStyle.gray,
-        custom_id="admin_stock"
-    )
+    # 📊 VIEW STOCK (🔥 FIX สำคัญสุด)
+    @discord.ui.button(label="📊 ดูสต๊อก", style=discord.ButtonStyle.gray, custom_id="admin_stock")
     async def view_stock(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         if not self.is_admin(interaction):
             return await interaction.response.send_message("❌ ไม่มีสิทธิ์", ephemeral=True)
 
         try:
-            cur = self.bot.mem.conn.execute(
-                "SELECT name, qty, price FROM stock"
-            )
-            data = cur.fetchall()
+            data = await self.bot.mem.get_all_stock()
         except:
             data = []
 
         if not data:
             return await interaction.response.send_message("❌ ไม่มีสต๊อก", ephemeral=True)
 
-        msg = "\n".join([f"{n} | {q} | {p}" for n, q, p in data[:15]])
+        msg = "\n".join([f"{n} | {q}" for n, q in data[:15]])
 
         await interaction.response.send_message(
             f"📦 STOCK\n\n{msg}",
