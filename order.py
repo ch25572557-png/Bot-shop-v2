@@ -60,7 +60,7 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # 🔥 ไม่ผูก stock แล้ว → ไป FARMING ตรง
+        # 🔥 ไม่ผูก stock → FARMING เลย
         await self.mem.update_order_status(order_id, "FARMING")
 
         if self.farm_manager:
@@ -73,16 +73,9 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # ✅ COMPLETE ORDER (FINAL)
+    # ✅ COMPLETE ORDER (FINAL FIX)
     # =====================
     async def complete(self, channel, interaction=None):
-
-        # 🔥 กัน interaction failed
-        if interaction:
-            try:
-                await interaction.response.defer(ephemeral=True)
-            except:
-                pass
 
         order_id = await self.mem.get_order_by_channel(str(channel.id))
         if not order_id:
@@ -111,7 +104,7 @@ class OrderSystem:
                     return False
 
                 # =====================
-                # 📦 TRY CUT STOCK
+                # 📦 TRY CUT STOCK (ไม่บังคับ)
                 # =====================
                 stock_msg = ""
 
@@ -148,7 +141,8 @@ class OrderSystem:
                     )
                 )
 
-                await asyncio.sleep(4)
+                # 🔥 รอให้ message ส่งก่อนค่อยลบ
+                await asyncio.sleep(3)
 
                 try:
                     fresh = self.bot.get_channel(channel.id) or await self.bot.fetch_channel(channel.id)
