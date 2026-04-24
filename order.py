@@ -42,7 +42,7 @@ class OrderSystem:
             print("[TICKET ERROR]", e)
 
     # =====================
-    # 🛒 CREATE ORDER (ไม่ผูก stock แล้ว)
+    # 🛒 CREATE ORDER
     # =====================
     async def create(self, guild, user, item, amount=1, roblox_user=None):
 
@@ -60,7 +60,7 @@ class OrderSystem:
         if not order_id:
             return False
 
-        # 🔥 ไม่เช็ค stock แล้ว → ไป FARMING ตรง
+        # 🔥 ไม่ผูก stock แล้ว → ไป FARMING ตรง
         await self.mem.update_order_status(order_id, "FARMING")
 
         if self.farm_manager:
@@ -73,12 +73,20 @@ class OrderSystem:
         return order_id
 
     # =====================
-    # ✅ COMPLETE ORDER (🔥 FIX ใหญ่)
+    # ✅ COMPLETE ORDER (FINAL)
     # =====================
-    async def complete(self, channel):
+    async def complete(self, channel, interaction=None):
+
+        # 🔥 กัน interaction failed
+        if interaction:
+            try:
+                await interaction.response.defer(ephemeral=True)
+            except:
+                pass
 
         order_id = await self.mem.get_order_by_channel(str(channel.id))
         if not order_id:
+            await channel.send("❌ ไม่พบออเดอร์")
             return False
 
         if order_id in self.processing:
@@ -91,13 +99,37 @@ class OrderSystem:
 
                 data = await self.mem.get_order(order_id)
                 if not data:
+                    await channel.send("❌ ไม่พบข้อมูลออเดอร์")
                     return False
 
                 user, item, amount, roblox_user, status = data
+                item = item.lower().strip()
 
-                # 🔥 ไม่เช็ค READY แล้ว
-                # 🔥 ไม่ใช้ stock แล้ว
+                # 🔥 กันกดซ้ำ
+                if status == "DONE":
+                    await channel.send("⚠️ ออเดอร์นี้เสร็จแล้ว")
+                    return False
 
+                # =====================
+                # 📦 TRY CUT STOCK
+                # =====================
+                stock_msg = ""
+
+                try:
+                    ok = await self.mem.minus_stock(item, amount)
+
+                    if ok:
+                        stock_msg = f"📦 หักสต๊อกแล้ว ({item} -{amount})"
+                    else:
+                        stock_msg = "⚠️ สต๊อกไม่พอ → ข้าม"
+
+                except Exception as e:
+                    print("[STOCK SKIP]", e)
+                    stock_msg = "⚠️ ข้ามการหักสต๊อก"
+
+                # =====================
+                # ✅ COMPLETE
+                # =====================
                 await self.mem.update_order_status(order_id, "DONE")
 
                 point = int(self.brain.setting("POINT_PER_ORDER", 0))
@@ -111,12 +143,12 @@ class OrderSystem:
                 await channel.send(
                     embed=discord.Embed(
                         title="✅ DONE",
-                        description=f"{item} x{amount}\n+{point} points",
+                        description=f"{item} x{amount}\n+{point} points\n\n{stock_msg}",
                         color=0x00ff00
                     )
                 )
 
-                await asyncio.sleep(2)
+                await asyncio.sleep(4)
 
                 try:
                     fresh = self.bot.get_channel(channel.id) or await self.bot.fetch_channel(channel.id)
